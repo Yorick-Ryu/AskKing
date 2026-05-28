@@ -1,0 +1,165 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: AskKing Relay public deployment on AWS Lambda and DynamoDB.
+
+Parameters:
+  PublicBaseUrl:
+    Type: String
+    Description: Public HTTPS base URL used by Codex hooks and iOS clients.
+  AdminToken:
+    Type: String
+    NoEcho: true
+    Description: Bearer token for admin endpoints.
+  ApnsEnabled:
+    Type: String
+    Default: "0"
+    AllowedValues: ["0", "1"]
+  ApnsKeyId:
+    Type: String
+    Default: ""
+  ApnsTeamId:
+    Type: String
+    Default: ""
+  ApnsTopic:
+    Type: String
+    Default: ""
+  ApnsKeyPath:
+    Type: String
+    Default: ""
+    Description: Lambda filesystem path for APNs .p8 key if bundled.
+  ApnsKeySecretArn:
+    Type: String
+    Default: ""
+    Description: Secrets Manager secret ARN containing the APNs .p8 key. Prefer this for production.
+  ApnsProduction:
+    Type: String
+    Default: "0"
+    AllowedValues: ["0", "1"]
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    Timeout: 65
+    MemorySize: 512
+    Environment:
+      Variables:
+        ASKKING_PUBLIC_BASE_URL: !Ref PublicBaseUrl
+        ASKKING_ADMIN_TOKEN: !Ref AdminToken
+        ASKKING_APNS_ENABLED: !Ref ApnsEnabled
+        ASKKING_APNS_KEY_ID: !Ref ApnsKeyId
+        ASKKING_APNS_TEAM_ID: !Ref ApnsTeamId
+        ASKKING_APNS_TOPIC: !Ref ApnsTopic
+        ASKKING_APNS_KEY_PATH: !Ref ApnsKeyPath
+        ASKKING_APNS_KEY_SECRET_ID: !Ref ApnsKeySecretArn
+        ASKKING_APNS_PRODUCTION: !Ref ApnsProduction
+        ASKKING_DDB_CLIENTS_TABLE: !Ref ClientsTable
+        ASKKING_DDB_DEVICES_TABLE: !Ref DevicesTable
+        ASKKING_DDB_PAIRING_CODES_TABLE: !Ref PairingCodesTable
+        ASKKING_DDB_APPROVALS_TABLE: !Ref ApprovalsTable
+        ASKKING_DDB_COMPLETIONS_TABLE: !Ref CompletionsTable
+
+Conditions:
+  HasApnsKeySecret: !Not [!Equals [!Ref ApnsKeySecretArn, ""]]
+
+Resources:
+  RelayFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../../
+      Handler: dist/lambda.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClientsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DevicesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PairingCodesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApprovalsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CompletionsTable
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !If
+                - HasApnsKeySecret
+                - !Ref ApnsKeySecretArn
+                - !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:askking/apns-*"
+      Events:
+        Api:
+          Type: HttpApi
+
+  ClientsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: tokenHash
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tokenHash
+          KeyType: HASH
+
+  DevicesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionTokenHash
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionTokenHash
+          KeyType: HASH
+
+  PairingCodesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: expiresTtl
+        Enabled: true
+      AttributeDefinitions:
+        - AttributeName: code
+          AttributeType: S
+      KeySchema:
+        - AttributeName: code
+          KeyType: HASH
+
+  ApprovalsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: expiresTtl
+        Enabled: true
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
+  CompletionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: expiresTtl
+        Enabled: true
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
+Outputs:
+  ApiEndpoint:
+    Description: Lambda HTTP API endpoint.
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  RelayFunctionName:
+    Description: Lambda function name.
+    Value: !Ref RelayFunction

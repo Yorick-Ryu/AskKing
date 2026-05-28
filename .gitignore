@@ -1,0 +1,9 @@
+node_modules/
+__pycache__/
+*.pyc
+askking.sqlite
+askking.sqlite-*
+.DS_Store
+dist/
+ios/AskKing/build/
+DerivedData/

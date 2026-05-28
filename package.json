@@ -1,0 +1,27 @@
+{
+  "name": "askking",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx relay/src/index.ts",
+    "smoke:local": "node scripts/smoke-local.mjs",
+    "typecheck": "tsc --noEmit",
+    "relay:pair": "tsx relay/src/cli.ts pair",
+    "relay:client": "tsx relay/src/cli.ts client"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.830.0",
+    "@aws-sdk/client-secrets-manager": "^3.830.0",
+    "@aws-sdk/lib-dynamodb": "^3.830.0",
+    "@hono/node-server": "^1.14.4",
+    "better-sqlite3": "^11.10.0",
+    "hono": "^4.7.11"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.24",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
