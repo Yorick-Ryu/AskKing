@@ -281,10 +281,10 @@ export class DynamoStore implements RelayStore {
     return this.getApproval(id);
   }
 
-  async createCompletion(input: Omit<CompletionEvent, "id" | "status" | "createdAt" | "reply" | "repliedAt">) {
+  async createCompletion(input: Omit<CompletionEvent, "id" | "createdAt" | "reply" | "repliedAt">) {
     const id = randomToken("done").slice(0, 26);
     const createdAt = new Date().toISOString();
-    const completion: CompletionEvent = { ...input, id, status: "waiting_reply", createdAt, reply: null, repliedAt: null };
+    const completion: CompletionEvent = { ...input, id, createdAt, reply: null, repliedAt: null };
     await this.db.send(new PutCommand({
       TableName: this.config.completionsTable,
       Item: {
@@ -308,15 +308,15 @@ export class DynamoStore implements RelayStore {
     const current = await this.getCompletion(id);
     const now = new Date().toISOString();
     if (!current) return null;
-    if (current.status !== "waiting_reply") return current;
-    if (current.expiresAt < now) {
+    if (current.status !== "waiting" && current.status !== "notified") return current;
+    if (current.status === "waiting" && current.expiresAt < now) {
       await this.db.send(new UpdateCommand({
         TableName: this.config.completionsTable,
         Key: { id },
         UpdateExpression: "set #status = :expired",
         ConditionExpression: "#status = :waiting",
         ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: { ":expired": "expired", ":waiting": "waiting_reply" }
+        ExpressionAttributeValues: { ":expired": "expired", ":waiting": "waiting" }
       })).catch(() => undefined);
       return this.getCompletion(id);
     }
@@ -324,11 +324,62 @@ export class DynamoStore implements RelayStore {
       TableName: this.config.completionsTable,
       Key: { id },
       UpdateExpression: "set #status = :replied, reply = :reply, repliedAt = :now",
-      ConditionExpression: "#status = :waiting",
+      ConditionExpression: "#status IN (:waiting, :notified)",
       ExpressionAttributeNames: { "#status": "status" },
-      ExpressionAttributeValues: { ":replied": "replied", ":reply": reply, ":now": now, ":waiting": "waiting_reply" }
+      ExpressionAttributeValues: { ":replied": "replied", ":reply": reply, ":now": now, ":waiting": "waiting", ":notified": "notified" }
     })).catch(() => undefined);
     return this.getCompletion(id);
+  }
+
+  async interruptCompletion(id: string) {
+    const current = await this.getCompletion(id);
+    if (!current) return null;
+    if (current.status !== "waiting" && current.status !== "notified") return current;
+    await this.db.send(new UpdateCommand({
+      TableName: this.config.completionsTable,
+      Key: { id },
+      UpdateExpression: "set #status = :interrupted",
+      ConditionExpression: "#status IN (:waiting, :notified)",
+      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeValues: { ":interrupted": "interrupted", ":waiting": "waiting", ":notified": "notified" }
+    })).catch(() => undefined);
+    return this.getCompletion(id);
+  }
+
+  async continueLatestCompletionLocally(input: { clientId: string; cwd: string; projectName: string; sessionKey: string; prompt: string }) {
+    if (!input.sessionKey) return null;
+    const result = await this.db.send(new ScanCommand({
+      TableName: this.config.completionsTable,
+      FilterExpression: "clientId = :clientId and cwd = :cwd and projectName = :projectName and sessionKey = :sessionKey and #status IN (:waiting, :notified, :interrupted)",
+      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeValues: {
+        ":clientId": input.clientId,
+        ":cwd": input.cwd,
+        ":projectName": input.projectName,
+        ":sessionKey": input.sessionKey,
+        ":waiting": "waiting",
+        ":notified": "notified",
+        ":interrupted": "interrupted"
+      }
+    }));
+    const current = ((result.Items ?? []) as CompletionEvent[]).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    if (!current) return null;
+    await this.db.send(new UpdateCommand({
+      TableName: this.config.completionsTable,
+      Key: { id: current.id },
+      UpdateExpression: "set #status = :continued, reply = :prompt, repliedAt = :now",
+      ConditionExpression: "#status IN (:waiting, :notified, :interrupted)",
+      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeValues: {
+        ":continued": "replied",
+        ":prompt": input.prompt,
+        ":now": new Date().toISOString(),
+        ":waiting": "waiting",
+        ":notified": "notified",
+        ":interrupted": "interrupted"
+      }
+    })).catch(() => undefined);
+    return this.getCompletion(current.id);
   }
 
   async listEvents(limit = 50): Promise<EventListItem[]> {
@@ -344,7 +395,9 @@ export class DynamoStore implements RelayStore {
         model: item.model,
         status: item.status,
         summary: item.commandSummary,
-        createdAt: item.createdAt
+        createdAt: item.createdAt,
+        expiresAt: item.expiresAt,
+        reply: null
       })),
       ...((completions.Items ?? []) as CompletionEvent[]).map((item) => ({
         kind: "completion" as const,
@@ -353,7 +406,9 @@ export class DynamoStore implements RelayStore {
         model: item.model,
         status: item.status,
         summary: item.summary,
-        createdAt: item.createdAt
+        createdAt: item.createdAt,
+        expiresAt: item.expiresAt,
+        reply: item.reply
       }))
     ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
   }
@@ -362,7 +417,7 @@ export class DynamoStore implements RelayStore {
     const now = new Date().toISOString();
     await Promise.all([
       this.expireTable(this.config.approvalsTable, "pending", now),
-      this.expireTable(this.config.completionsTable, "waiting_reply", now)
+      this.expireTable(this.config.completionsTable, "waiting", now)
     ]);
   }
 

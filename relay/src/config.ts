@@ -1,3 +1,5 @@
+import { networkInterfaces } from "node:os";
+
 export type RelayConfig = {
   port: number;
   databasePath: string;
@@ -15,12 +17,25 @@ export type RelayConfig = {
   };
 };
 
+export function localNetworkBaseUrl(port: number) {
+  const interfaces = networkInterfaces();
+  for (const addresses of Object.values(interfaces)) {
+    for (const address of addresses ?? []) {
+      if (address.family === "IPv4" && !address.internal) {
+        return `http://${address.address}:${port}`;
+      }
+    }
+  }
+  return `http://localhost:${port}`;
+}
+
 export function loadConfig(): RelayConfig {
   const port = Number(process.env.ASKKING_PORT ?? "8787");
+  const defaultPublicBaseUrl = localNetworkBaseUrl(port);
   return {
     port,
     databasePath: process.env.ASKKING_DB ?? "./askking.sqlite",
-    publicBaseUrl: process.env.ASKKING_PUBLIC_BASE_URL ?? `http://localhost:${port}`,
+    publicBaseUrl: process.env.ASKKING_PUBLIC_BASE_URL ?? defaultPublicBaseUrl,
     adminToken: process.env.ASKKING_ADMIN_TOKEN ?? "dev-admin-token",
     defaultClientName: process.env.ASKKING_CLIENT_NAME ?? "Local Codex",
     apns: {

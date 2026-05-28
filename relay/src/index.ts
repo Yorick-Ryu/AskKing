@@ -9,4 +9,7 @@ const app = createApp(config, store);
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`AskKing Relay listening on http://localhost:${info.port}`);
+  if (!config.publicBaseUrl.includes("localhost")) {
+    console.log(`AskKing Relay LAN URL: ${config.publicBaseUrl}`);
+  }
 });

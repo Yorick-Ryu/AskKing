@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
 
+let computerHandoffReply = "交接给电脑"
+
 enum AppearanceMode: String, CaseIterable, Identifiable {
     case system
     case light
@@ -38,6 +40,20 @@ struct EventItem: Identifiable, Codable, Hashable {
     let status: String
     let summary: String
     let createdAt: String
+    let expiresAt: String?
+    let reply: String?
+
+    var isComputerHandoff: Bool {
+        kind == "completion" && status == "replied" && reply == computerHandoffReply
+    }
+
+    var canHandoffToComputer: Bool {
+        kind == "completion" && status == "waiting"
+    }
+
+    var handoffActionTitle: String {
+        isComputerHandoff ? "已交接" : "交接"
+    }
 }
 
 struct Approval: Identifiable, Codable {
@@ -55,6 +71,14 @@ struct Approval: Identifiable, Codable {
 
     var isHighRisk: Bool {
         riskSummary.localizedCaseInsensitiveContains("high risk")
+    }
+
+    var hasReason: Bool {
+        !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var hasRiskSummary: Bool {
+        !riskSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 

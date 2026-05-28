@@ -18,6 +18,7 @@
 		A00000000000000000000009 /* Views/CompletionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000019 /* Views/CompletionDetailView.swift */; };
 		A0000000000000000000000A /* Views/ConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001A /* Views/ConnectionView.swift */; };
 		A0000000000000000000000B /* Views/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001B /* Views/SettingsView.swift */; };
+		A0000000000000000000000C /* Views/MarkdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001E /* Views/MarkdownText.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +36,7 @@
 		A0000000000000000000001B /* Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/SettingsView.swift; sourceTree = "<group>"; };
 		A0000000000000000000001C /* Resources/Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Resources/Info.plist; sourceTree = "<group>"; };
 		A0000000000000000000001D /* AskKing.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AskKing.entitlements; sourceTree = "<group>"; };
+		A0000000000000000000001E /* Views/MarkdownText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/MarkdownText.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +80,7 @@
 				A00000000000000000000019 /* Views/CompletionDetailView.swift */,
 				A0000000000000000000001A /* Views/ConnectionView.swift */,
 				A0000000000000000000001B /* Views/SettingsView.swift */,
+				A0000000000000000000001E /* Views/MarkdownText.swift */,
 				A0000000000000000000001C /* Resources/Info.plist */,
 				A0000000000000000000001D /* AskKing.entitlements */,
 			);
@@ -164,6 +167,7 @@
 				A00000000000000000000009 /* Views/CompletionDetailView.swift in Sources */,
 				A0000000000000000000000A /* Views/ConnectionView.swift in Sources */,
 				A0000000000000000000000B /* Views/SettingsView.swift in Sources */,
+				A0000000000000000000000C /* Views/MarkdownText.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

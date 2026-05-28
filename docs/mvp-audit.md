@@ -26,7 +26,7 @@ Current status against `codex-ios-approval-relay-prd.md`.
 - TypeScript typecheck and build.
 - Python hook syntax.
 - iOS simulator build with signing disabled.
-- Automated local Relay and hook smoke test via `pnpm smoke:local`: unauthorized client, approval creation, pairing, iOS decision, repeated decision idempotency, server-side command redaction, summary truncation, high-risk marking, client and device revoke rejection, approval expiry without auto-allow, Codex approval wait, completion creation, iOS continuation reply, Codex completion wait, actual Python `PermissionRequest` hook allow, deny, and timeout-deny outputs, actual Python `Stop` hook continuation output, and Stop no-reply normal `{}` output.
+- Automated local Relay and hook smoke test via `pnpm smoke:local`: unauthorized client, approval creation, pairing, iOS decision, repeated decision idempotency, server-side command redaction, summary truncation, high-risk marking, client and device revoke rejection, approval expiry without auto-allow, Codex approval wait, completion creation, iOS continuation reply, Codex completion wait, actual Python `PermissionRequest` hook allow, deny, and timeout fallback outputs, actual Python `Stop` hook continuation output, and Stop no-reply normal `{}` output.
 
 ## Needs External Verification
 

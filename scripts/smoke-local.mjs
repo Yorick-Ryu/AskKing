@@ -43,6 +43,7 @@ try {
     })
   });
   assert(approval.approval.status === "pending", "approval starts pending");
+  assert(approval.approval.riskSummary === "", "normal approval has no fallback risk summary");
 
   const pairing = await requestJson(`${baseUrl}/api/admin/pairing-code`, {
     method: "POST",
@@ -144,7 +145,7 @@ try {
       ttlSeconds: 60
     })
   });
-  assert(completion.completion.status === "waiting_reply", "completion starts waiting for reply");
+  assert(completion.completion.status === "waiting", "completion starts waiting for reply");
 
   const replied = await requestJson(`${baseUrl}/api/mobile/completions/${completion.completion.id}/reply`, {
     method: "POST",
@@ -159,18 +160,68 @@ try {
   assert(completionWait.completion.status === "replied", "Codex wait sees completion reply");
   assert(completionWait.completion.reply === "continue with smoke test", "Codex wait receives continuation text");
 
+  const notifiedCompletion = await requestJson(`${baseUrl}/api/codex/completions`, {
+    method: "POST",
+    headers: authHeaders(clientToken),
+    body: JSON.stringify({
+      projectName: "Smoke",
+      cwd: process.cwd(),
+      sessionKey: "smoke-local-session",
+      summary: "Codex turn notify only.",
+      waitForReply: false,
+      ttlSeconds: 60
+    })
+  });
+  assert(notifiedCompletion.completion.status === "notified", "notify-only completion starts notified");
+
+  const localPrompt = await requestJson(`${baseUrl}/api/codex/completions/local-prompt`, {
+    method: "POST",
+    headers: authHeaders(clientToken),
+    body: JSON.stringify({
+      projectName: "Smoke",
+      cwd: process.cwd(),
+      sessionKey: "smoke-local-session",
+      prompt: "continue locally from Mac"
+    })
+  });
+  assert(localPrompt.completion.status === "replied", "local prompt marks latest completion replied");
+  assert(localPrompt.completion.reply === "continue locally from Mac", "local prompt text is stored for iOS state sync");
+
+  const interruptibleCompletion = await requestJson(`${baseUrl}/api/codex/completions`, {
+    method: "POST",
+    headers: authHeaders(clientToken),
+    body: JSON.stringify({
+      projectName: "Smoke",
+      cwd: process.cwd(),
+      summary: "Codex turn interrupted.",
+      ttlSeconds: 60
+    })
+  });
+  const interruptedCompletion = await requestJson(`${baseUrl}/api/codex/completions/${interruptibleCompletion.completion.id}/interrupt`, {
+    method: "POST",
+    headers: authHeaders(clientToken)
+  });
+  assert(interruptedCompletion.completion.status === "interrupted", "Codex can mark a waiting completion interrupted");
+
   const permissionHook = runHook({
-    hookEventName: "PermissionRequest",
+    hook_event_name: "PermissionRequest",
     eventId: "hook-permission-smoke",
     projectName: "Smoke",
     cwd: process.cwd(),
     model: "smoke-model",
-    command: "echo hook approval",
-    reason: "Smoke test permission request"
+    tool_input: {
+      command: "echo hook approval",
+      description: "Smoke test permission request"
+    }
   }, clientToken, {
     ASKKING_APPROVAL_TIMEOUT_SECONDS: "20"
   });
   const hookApprovalEvent = await waitForEvent(paired.sessionToken, "approval", "echo hook approval");
+  const hookApprovalDetail = await requestJson(`${baseUrl}/api/mobile/approvals/${hookApprovalEvent.id}`, {
+    headers: authHeaders(paired.sessionToken)
+  });
+  assert(hookApprovalDetail.approval.commandFull === "echo hook approval", "PermissionRequest hook reads nested tool_input command");
+  assert(hookApprovalDetail.approval.reason === "Smoke test permission request", "PermissionRequest hook reads nested tool_input description");
   await requestJson(`${baseUrl}/api/mobile/approvals/${hookApprovalEvent.id}/decision`, {
     method: "POST",
     headers: authHeaders(paired.sessionToken),
@@ -232,8 +283,8 @@ try {
     ASKKING_APPROVAL_TIMEOUT_SECONDS: "1"
   }));
   assert(
-    timeoutPermissionHookOutput.hookSpecificOutput?.decision?.behavior === "deny",
-    "PermissionRequest hook returns deny on approval timeout"
+    Object.keys(timeoutPermissionHookOutput).length === 0,
+    "PermissionRequest hook falls back to default Codex approval on timeout"
   );
 
   const stopHook = runHook({
@@ -253,9 +304,8 @@ try {
     body: JSON.stringify({ reply: "continue from hook smoke" })
   });
   const stopHookOutput = JSON.parse(await stopHook);
-  assert(stopHookOutput.hookSpecificOutput?.hookEventName === "Stop", "Stop hook returns hook-specific output");
-  assert(stopHookOutput.hookSpecificOutput?.decision === "block", "Stop hook blocks to continue");
-  assert(stopHookOutput.hookSpecificOutput?.reason === "continue from hook smoke", "Stop hook returns continuation prompt");
+  assert(stopHookOutput.decision === "block", "Stop hook blocks to continue");
+  assert(stopHookOutput.reason === "continue from hook smoke", "Stop hook returns continuation prompt");
 
   const stopHookWithoutReply = await runHook({
     hookEventName: "Stop",
@@ -268,6 +318,51 @@ try {
     ASKKING_STOP_WAIT_SECONDS: "1"
   });
   assert(stopHookWithoutReply === "{}", "Stop hook returns empty JSON when no continuation reply arrives");
+
+  const stopHookNotifyOnly = await runHook({
+    hookEventName: "Stop",
+    eventId: "hook-stop-notify-only-smoke",
+    sessionId: "hook-notify-only-session",
+    projectName: "Smoke",
+    cwd: process.cwd(),
+    model: "smoke-model",
+    summary: "Hook stop notify only."
+  }, clientToken, {
+    ASKKING_STOP_MODE: "notify_only",
+    ASKKING_STOP_WAIT_SECONDS: "20"
+  });
+  assert(stopHookNotifyOnly === "{}", "Stop hook notify-only returns immediately");
+  const notifyOnlyEvent = await waitForEvent(paired.sessionToken, "completion", "Hook stop notify only.");
+  assert(notifyOnlyEvent.status === "notified", "Stop hook notify-only creates notified completion");
+
+  const userPromptSubmitOutput = await runHook({
+    hookEventName: "UserPromptSubmit",
+    eventId: "hook-user-prompt-submit-smoke",
+    sessionId: "hook-notify-only-session",
+    projectName: "Smoke",
+    cwd: process.cwd(),
+    model: "smoke-model",
+    prompt: "continue after notify-only from Mac"
+  }, clientToken);
+  assert(userPromptSubmitOutput === "{}", "UserPromptSubmit hook returns empty JSON");
+  const locallyContinuedEvent = await requestJson(`${baseUrl}/api/mobile/completions/${notifyOnlyEvent.id}`, {
+    headers: authHeaders(paired.sessionToken)
+  });
+  assert(locallyContinuedEvent.completion.status === "replied", "UserPromptSubmit marks notify-only completion replied");
+  assert(locallyContinuedEvent.completion.reply === "continue after notify-only from Mac", "UserPromptSubmit stores local prompt");
+
+  const stopHookWithAssistantMessage = runHook({
+    hookEventName: "Stop",
+    eventId: "hook-stop-assistant-message-smoke",
+    projectName: "Smoke",
+    cwd: process.cwd(),
+    model: "smoke-model",
+    last_assistant_message: "Finished real work from the assistant message."
+  }, clientToken, {
+    ASKKING_STOP_WAIT_SECONDS: "1"
+  });
+  await waitForEvent(paired.sessionToken, "completion", "Finished real work from the assistant message.");
+  assert(await stopHookWithAssistantMessage === "{}", "Stop hook summary falls back to last assistant message");
 
   console.log("AskKing local smoke test passed");
 } finally {

@@ -22,8 +22,9 @@ struct RootView: View {
             .tabItem { Label("设置", systemImage: "gearshape") }
         }
         .task {
-            await appState.updateNotificationStatus()
+            await appState.autoDiscoverRelayIfNeeded()
             await appState.refreshEvents()
+            appState.startPolling()
         }
         .alert("AskKing", isPresented: Binding(get: { appState.notice != nil }, set: { if !$0 { appState.notice = nil } })) {
             Button("好", role: .cancel) { appState.notice = nil }

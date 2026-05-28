@@ -31,5 +31,5 @@ export function riskSummary(command: string, fallback: string) {
   if (HIGH_RISK_PATTERNS.some((pattern) => pattern.test(sanitized))) {
     return "High risk command detected. Review in app before allowing.";
   }
-  return fallback.trim() || "Review before allowing.";
+  return fallback.trim();
 }

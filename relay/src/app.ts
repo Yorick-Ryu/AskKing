@@ -26,11 +26,34 @@ function idParam(c: { req: { param: (name: string) => string | undefined } }) {
   return id;
 }
 
+function requestTarget(url: string) {
+  const parsed = new URL(url);
+  return `${parsed.pathname}${parsed.search}`;
+}
+
 export function createApp(config: RelayConfig, store: RelayStore) {
   const app = new Hono<AppEnv>();
   const apns = new ApnsSender(config.apns);
 
   app.use("*", cors());
+  app.use("*", async (c, next) => {
+    const requestId = randomUUID().slice(0, 8);
+    const startedAt = Date.now();
+    try {
+      await next();
+      const durationMs = Date.now() - startedAt;
+      const clientId = c.get("clientId");
+      const deviceId = c.get("deviceId");
+      console.info("[http]", requestId, c.req.method, requestTarget(c.req.url), c.res.status, `${durationMs}ms`, {
+        clientId,
+        deviceId
+      });
+    } catch (error) {
+      const durationMs = Date.now() - startedAt;
+      console.error("[http]", requestId, c.req.method, requestTarget(c.req.url), "error", `${durationMs}ms`, error);
+      throw error;
+    }
+  });
   app.use("*", async (_c, next) => {
     await store.expireOld();
     await next();
@@ -130,7 +153,7 @@ export function createApp(config: RelayConfig, store: RelayStore) {
       commandSummary: commandSummary(rawSummary),
       commandFull,
       reason: text(body.reason, "Codex requested permission."),
-      riskSummary: riskSummary(commandFull, text(body.riskSummary, "Review before allowing.")),
+      riskSummary: riskSummary(commandFull, text(body.riskSummary)),
       expiresAt: expiresIn(Number(body.ttlSeconds ?? 600))
     });
     Promise.resolve(store.listPushDevices())
@@ -166,7 +189,9 @@ export function createApp(config: RelayConfig, store: RelayStore) {
       projectName: text(body.projectName, "AskKing"),
       cwd: text(body.cwd),
       model: text(body.model),
+      sessionKey: text(body.sessionKey),
       summary: redact(text(body.summary, "Codex turn completed.")),
+      status: body.waitForReply === false ? "notified" : "waiting",
       expiresAt: expiresIn(Number(body.ttlSeconds ?? 45))
     });
     Promise.resolve(store.listPushDevices())
@@ -175,11 +200,31 @@ export function createApp(config: RelayConfig, store: RelayStore) {
     return c.json({ completion });
   });
 
+  app.post("/api/codex/completions/:id/interrupt", requireClient(store), async (c) => {
+    const completion = await store.interruptCompletion(idParam(c));
+    if (!completion) return c.json({ error: "not_found" }, 404);
+    return c.json({ completion });
+  });
+
+  app.post("/api/codex/completions/local-prompt", requireClient(store), async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const prompt = text(body.prompt);
+    if (!prompt) return c.json({ error: "prompt_required" }, 400);
+    const completion = await store.continueLatestCompletionLocally({
+      clientId: c.get("clientId")!,
+      cwd: text(body.cwd),
+      projectName: text(body.projectName, "AskKing"),
+      sessionKey: text(body.sessionKey),
+      prompt: redact(prompt)
+    });
+    return c.json({ completion });
+  });
+
   app.get("/api/codex/completions/:id/wait", requireClient(store), async (c) => {
     const deadline = Date.now() + Math.min(Number(c.req.query("timeoutMs") ?? "45000"), 60000);
     const completionId = idParam(c);
     let completion = await store.getCompletion(completionId);
-    while (completion?.status === "waiting_reply" && Date.now() < deadline) {
+    while (completion?.status === "waiting" && Date.now() < deadline) {
       await sleep(1000);
       await store.expireOld();
       completion = await store.getCompletion(completionId);

@@ -61,6 +61,7 @@ export class Store implements RelayStore {
         project_name text not null,
         cwd text not null,
         model text not null,
+        session_key text not null default '',
         summary text not null,
         status text not null,
         created_at text not null,
@@ -69,6 +70,10 @@ export class Store implements RelayStore {
         replied_at text
       );
     `);
+    const completionColumns = this.db.prepare("pragma table_info(completions)").all() as { name: string }[];
+    if (!completionColumns.some((column) => column.name === "session_key")) {
+      this.db.prepare("alter table completions add column session_key text not null default ''").run();
+    }
   }
 
   createClient(name: string, defaultProjectName: string) {
@@ -198,20 +203,20 @@ export class Store implements RelayStore {
     return this.getApproval(id);
   }
 
-  createCompletion(input: Omit<CompletionEvent, "id" | "status" | "createdAt" | "reply" | "repliedAt">) {
+  createCompletion(input: Omit<CompletionEvent, "id" | "createdAt" | "reply" | "repliedAt">) {
     const id = randomToken("done").slice(0, 26);
     const createdAt = new Date().toISOString();
-    const row: CompletionEvent = { ...input, id, status: "waiting_reply", createdAt, reply: null, repliedAt: null };
+    const row: CompletionEvent = { ...input, id, createdAt, reply: null, repliedAt: null };
     this.db.prepare(`
-      insert into completions (id, client_id, event_id, project_name, cwd, model, summary, status, created_at, expires_at)
-      values (@id, @clientId, @eventId, @projectName, @cwd, @model, @summary, @status, @createdAt, @expiresAt)
+      insert into completions (id, client_id, event_id, project_name, cwd, model, session_key, summary, status, created_at, expires_at)
+      values (@id, @clientId, @eventId, @projectName, @cwd, @model, @sessionKey, @summary, @status, @createdAt, @expiresAt)
     `).run(row);
     return row;
   }
 
   getCompletion(id: string): CompletionEvent | null {
     return this.db.prepare(`
-      select id, client_id as clientId, event_id as eventId, project_name as projectName, cwd, model, summary, status,
+      select id, client_id as clientId, event_id as eventId, project_name as projectName, cwd, model, session_key as sessionKey, summary, status,
         created_at as createdAt, expires_at as expiresAt, reply, replied_at as repliedAt
       from completions where id = ?
     `).get(id) as CompletionEvent | null;
@@ -221,21 +226,53 @@ export class Store implements RelayStore {
     const current = this.getCompletion(id);
     const now = new Date().toISOString();
     if (!current) return null;
-    if (current.status !== "waiting_reply") return current;
-    if (current.expiresAt < now) {
-      this.db.prepare("update completions set status = 'expired' where id = ? and status = 'waiting_reply'").run(id);
+    if (current.status !== "waiting" && current.status !== "notified") return current;
+    if (current.status === "waiting" && current.expiresAt < now) {
+      this.db.prepare("update completions set status = 'expired' where id = ? and status = 'waiting'").run(id);
       return this.getCompletion(id);
     }
-    this.db.prepare("update completions set status = 'replied', reply = ?, replied_at = ? where id = ? and status = 'waiting_reply'").run(reply, now, id);
+    this.db.prepare("update completions set status = 'replied', reply = ?, replied_at = ? where id = ? and status in ('waiting', 'notified')").run(reply, now, id);
     return this.getCompletion(id);
+  }
+
+  interruptCompletion(id: string) {
+    const current = this.getCompletion(id);
+    if (!current) return null;
+    if (current.status !== "waiting" && current.status !== "notified") return current;
+    this.db.prepare("update completions set status = 'interrupted' where id = ? and status in ('waiting', 'notified')").run(id);
+    return this.getCompletion(id);
+  }
+
+  continueLatestCompletionLocally(input: { clientId: string; cwd: string; projectName: string; sessionKey: string; prompt: string }) {
+    if (!input.sessionKey) return null;
+    const current = this.db.prepare(`
+      select id, client_id as clientId, event_id as eventId, project_name as projectName, cwd, model, session_key as sessionKey, summary, status,
+        created_at as createdAt, expires_at as expiresAt, reply, replied_at as repliedAt
+      from completions
+      where client_id = ?
+        and cwd = ?
+        and project_name = ?
+        and session_key = ?
+        and status in ('waiting', 'notified', 'interrupted')
+      order by created_at desc
+      limit 1
+    `).get(input.clientId, input.cwd, input.projectName, input.sessionKey) as CompletionEvent | undefined;
+    if (!current) return null;
+
+    this.db.prepare(`
+      update completions
+      set status = 'replied', reply = ?, replied_at = ?
+      where id = ? and status in ('waiting', 'notified', 'interrupted')
+    `).run(input.prompt, new Date().toISOString(), current.id);
+    return this.getCompletion(current.id);
   }
 
   listEvents(limit = 50): EventListItem[] {
     return this.db.prepare(`
-      select 'approval' as kind, id, project_name as projectName, model, status, command_summary as summary, created_at as createdAt
+      select 'approval' as kind, id, project_name as projectName, model, status, command_summary as summary, created_at as createdAt, expires_at as expiresAt, null as reply
       from approvals
       union all
-      select 'completion' as kind, id, project_name as projectName, model, status, summary, created_at as createdAt
+      select 'completion' as kind, id, project_name as projectName, model, status, summary, created_at as createdAt, expires_at as expiresAt, reply
       from completions
       order by createdAt desc
       limit ?
@@ -245,6 +282,6 @@ export class Store implements RelayStore {
   expireOld() {
     const now = new Date().toISOString();
     this.db.prepare("update approvals set status = 'expired' where status = 'pending' and expires_at < ?").run(now);
-    this.db.prepare("update completions set status = 'expired' where status = 'waiting_reply' and expires_at < ?").run(now);
+    this.db.prepare("update completions set status = 'expired' where status = 'waiting' and expires_at < ?").run(now);
   }
 }

@@ -10,6 +10,8 @@ export type EventListItem = {
   status: string;
   summary: string;
   createdAt: string;
+  expiresAt: string;
+  reply?: string | null;
 };
 
 export type PairingCodeResult = {
@@ -42,9 +44,17 @@ export interface RelayStore {
   createApproval(input: Omit<ApprovalRequest, "id" | "status" | "decisionSource" | "createdAt" | "decidedAt">): MaybePromise<ApprovalRequest>;
   getApproval(id: string): MaybePromise<ApprovalRequest | null>;
   decideApproval(id: string, status: "allowed" | "denied", source: string): MaybePromise<ApprovalRequest | null>;
-  createCompletion(input: Omit<CompletionEvent, "id" | "status" | "createdAt" | "reply" | "repliedAt">): MaybePromise<CompletionEvent>;
+  createCompletion(input: Omit<CompletionEvent, "id" | "createdAt" | "reply" | "repliedAt">): MaybePromise<CompletionEvent>;
   getCompletion(id: string): MaybePromise<CompletionEvent | null>;
   replyCompletion(id: string, reply: string): MaybePromise<CompletionEvent | null>;
+  interruptCompletion(id: string): MaybePromise<CompletionEvent | null>;
+  continueLatestCompletionLocally(input: {
+    clientId: string;
+    cwd: string;
+    projectName: string;
+    sessionKey: string;
+    prompt: string;
+  }): MaybePromise<CompletionEvent | null>;
   listEvents(limit?: number): MaybePromise<EventListItem[]>;
   expireOld(): MaybePromise<void>;
 }

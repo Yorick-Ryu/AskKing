@@ -17,6 +17,12 @@ struct ConnectionView: View {
                 } label: {
                     Label("测试连接", systemImage: "dot.radiowaves.left.and.right")
                 }
+                Button {
+                    Task { await appState.discoverRelay() }
+                } label: {
+                    Label(appState.isDiscoveringRelay ? "正在自动发现" : "自动发现局域网 Relay", systemImage: "magnifyingglass")
+                }
+                .disabled(appState.isDiscoveringRelay)
             }
 
             Section("配对") {
@@ -51,5 +57,8 @@ struct ConnectionView: View {
             }
         }
         .navigationTitle("连接")
+        .task {
+            await appState.autoDiscoverRelayIfNeeded()
+        }
     }
 }

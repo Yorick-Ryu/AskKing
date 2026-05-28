@@ -1,5 +1,5 @@
 export type ApprovalStatus = "pending" | "allowed" | "denied" | "expired";
-export type CompletionStatus = "notified" | "waiting_reply" | "replied" | "expired";
+export type CompletionStatus = "notified" | "waiting" | "replied" | "interrupted" | "expired";
 
 export type ApprovalRequest = {
   id: string;
@@ -26,6 +26,7 @@ export type CompletionEvent = {
   projectName: string;
   cwd: string;
   model: string;
+  sessionKey: string;
   summary: string;
   status: CompletionStatus;
   createdAt: string;
