@@ -86,7 +86,7 @@ enum NotificationActions {
             title: "回复",
             options: [.authenticationRequired],
             textInputButtonTitle: "发送",
-            textInputPlaceholder: "继续指令"
+            textInputPlaceholder: "下一步指令"
         )
         let approval = UNNotificationCategory(
             identifier: approvalCategory,

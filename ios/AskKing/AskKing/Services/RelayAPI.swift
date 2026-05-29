@@ -9,8 +9,8 @@ struct RelayAPI {
         return (response as? HTTPURLResponse)?.statusCode == 200
     }
 
-    func pair(code: String, name: String) async throws -> PairResponse {
-        try await request("api/devices/pair", method: "POST", body: ["code": code, "name": name], authenticated: false)
+    func pair(code: String) async throws -> PairResponse {
+        try await request("api/devices/pair", method: "POST", body: ["code": code], authenticated: false)
     }
 
     func register(apnsToken: String) async throws {

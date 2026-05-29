@@ -41,9 +41,9 @@ final class AppState: ObservableObject {
     func pair(code: String) async {
         do {
             saveRelayURL()
-            let response = try await api.pair(code: code, name: UIDevice.current.name)
+            let response = try await api.pair(code: code)
             KeychainStore.set(response.sessionToken, for: "sessionToken")
-            UserDefaults.standard.set(response.deviceId, forKey: "deviceId")
+            KeychainStore.set(response.deviceId, for: "deviceId")
             isPaired = true
             notice = "配对完成"
             await requestNotifications(showSyncNotice: false)
@@ -217,7 +217,6 @@ final class AppState: ObservableObject {
     func handoffCompletionToComputer(id: String) async {
         do {
             _ = try await api.replyCompletion(id: id, reply: computerHandoffReply)
-            notice = "已交接给电脑"
             await refreshEvents()
         } catch {
             guard !isCancellationError(error) else { return }
@@ -228,6 +227,7 @@ final class AppState: ObservableObject {
     func logout() {
         stopPolling()
         KeychainStore.delete("sessionToken")
+        KeychainStore.delete("deviceId")
         isPaired = false
         events = []
     }

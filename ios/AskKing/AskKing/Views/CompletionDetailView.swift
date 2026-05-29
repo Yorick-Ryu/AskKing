@@ -119,7 +119,6 @@ struct CompletionDetailView: View {
         do {
             completion = try await appState.api.replyCompletion(id: id, reply: computerHandoffReply)
             reply = ""
-            appState.notice = "已交接给电脑"
             await appState.refreshEvents()
         } catch {
             guard !isCancellationError(error) else { return }
