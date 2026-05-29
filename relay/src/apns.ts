@@ -34,8 +34,7 @@ export class ApnsSender {
       aps: {
         alert: {
           title: "Codex 需要批准",
-          subtitle: approval.projectName,
-          body: approval.commandSummary
+          body: notificationBody(approval.projectName, "命令", approval.commandSummary)
         },
         category: isHighRisk ? "ASKKING_APPROVAL_REVIEW" : "ASKKING_APPROVAL",
         sound: "default",
@@ -51,8 +50,7 @@ export class ApnsSender {
       aps: {
         alert: {
           title: "Codex 已完成",
-          subtitle: completion.projectName,
-          body: completion.summary
+          body: notificationBody(completion.projectName, "结果", completion.summary)
         },
         category: "ASKKING_COMPLETION",
         sound: "default",
@@ -144,6 +142,18 @@ export class ApnsSender {
     if (response.SecretBinary) return Buffer.from(response.SecretBinary).toString("utf8");
     throw new Error(`APNs key secret ${this.config.keySecretId} has no string or binary value`);
   }
+}
+
+function notificationBody(projectName: string, label: string, value: string) {
+  return [`项目：${projectName}`, `${label}：${compactNotificationText(value)}`].join("\n");
+}
+
+function compactNotificationText(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 function parseSecretString(secret: string) {

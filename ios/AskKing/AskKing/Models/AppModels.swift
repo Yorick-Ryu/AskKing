@@ -27,6 +27,12 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppTab: Hashable {
+    case messages
+    case connection
+    case settings
+}
+
 struct EventRoute: Hashable {
     let kind: String
     let id: String

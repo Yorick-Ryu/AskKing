@@ -1,4 +1,5 @@
 import { networkInterfaces } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 
 export type RelayConfig = {
   port: number;
@@ -29,7 +30,28 @@ export function localNetworkBaseUrl(port: number) {
   return `http://localhost:${port}`;
 }
 
+export function loadEnvFile(path = ".env") {
+  if (!existsSync(path)) return;
+  const content = readFileSync(path, "utf8");
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) continue;
+
+    const [, key, rawValue] = match;
+    if (process.env[key] !== undefined) continue;
+
+    let value = rawValue.trim();
+    if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
+}
+
 export function loadConfig(): RelayConfig {
+  loadEnvFile();
   const port = Number(process.env.ASKKING_PORT ?? "8787");
   const defaultPublicBaseUrl = localNetworkBaseUrl(port);
   return {

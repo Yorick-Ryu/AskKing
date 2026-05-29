@@ -19,6 +19,7 @@
 		A0000000000000000000000A /* Views/ConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001A /* Views/ConnectionView.swift */; };
 		A0000000000000000000000B /* Views/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001B /* Views/SettingsView.swift */; };
 		A0000000000000000000000C /* Views/MarkdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001E /* Views/MarkdownText.swift */; };
+		A0000000000000000000000D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001F /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 		A0000000000000000000001C /* Resources/Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Resources/Info.plist; sourceTree = "<group>"; };
 		A0000000000000000000001D /* AskKing.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AskKing.entitlements; sourceTree = "<group>"; };
 		A0000000000000000000001E /* Views/MarkdownText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/MarkdownText.swift; sourceTree = "<group>"; };
+		A0000000000000000000001F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +83,7 @@
 				A0000000000000000000001A /* Views/ConnectionView.swift */,
 				A0000000000000000000001B /* Views/SettingsView.swift */,
 				A0000000000000000000001E /* Views/MarkdownText.swift */,
+				A0000000000000000000001F /* Assets.xcassets */,
 				A0000000000000000000001C /* Resources/Info.plist */,
 				A0000000000000000000001D /* AskKing.entitlements */,
 			);
@@ -119,6 +122,11 @@
 				TargetAttributes = {
 					A00000000000000000000050 = {
 						CreatedOnToolsVersion = 16.0;
+						SystemCapabilities = {
+							com.apple.Push = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
@@ -146,6 +154,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A0000000000000000000000D /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

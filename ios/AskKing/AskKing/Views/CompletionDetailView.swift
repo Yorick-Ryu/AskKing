@@ -38,14 +38,17 @@ struct CompletionDetailView: View {
                     Task { await sendHandoffToComputer() }
                 } label: {
                     Label(handoffButtonTitle(for: completion), systemImage: "desktopcomputer")
+                        .font(.headline)
+                        .foregroundStyle(canHandoff(completion) ? Color.white : Color.secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(.blue)
                 .disabled(!canHandoff(completion))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 10, leading: 18, bottom: 10, trailing: 18))
+                .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 10, trailing: 4))
             } else {
                 ProgressView()
             }
@@ -216,10 +219,6 @@ private struct LiquidGlassInputStyle: ViewModifier {
                                 .fill(Color.white.opacity(0.22))
                         }
                 }
-            }
-            .overlay {
-                Capsule()
-                    .strokeBorder(Color.white.opacity(0.38), lineWidth: 0.7)
             }
             .shadow(color: .black.opacity(0.08), radius: 18, y: 8)
     }

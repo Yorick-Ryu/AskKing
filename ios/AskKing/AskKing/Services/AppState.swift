@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import UserNotifications
 import Darwin
 
 @MainActor
@@ -12,11 +13,14 @@ final class AppState: ObservableObject {
     @Published var isDiscoveringRelay = false
     @Published var notice: String?
     @Published var selectedRoute: EventRoute?
+    @Published var selectedTab: AppTab = .messages
+    @Published var notificationStatus = "未知"
     @Published var appearance: AppearanceMode = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "system") ?? .system {
         didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
     }
 
     private var pollingTask: Task<Void, Never>?
+    private var shouldShowNextApnsSyncNotice = false
 
     var api: RelayAPI {
         RelayAPI(baseURL: URL(string: relayURLString)!, sessionToken: KeychainStore.get("sessionToken"))
@@ -42,12 +46,74 @@ final class AppState: ObservableObject {
             UserDefaults.standard.set(response.deviceId, forKey: "deviceId")
             isPaired = true
             notice = "配对完成"
+            await requestNotifications(showSyncNotice: false)
             await refreshEvents()
             startPolling()
         } catch {
             guard !isCancellationError(error) else { return }
             notice = error.localizedDescription
         }
+    }
+
+    func requestNotifications(showSyncNotice: Bool = true) async {
+        do {
+            let center = UNUserNotificationCenter.current()
+            NotificationActions.register()
+            let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
+            await updateNotificationStatus()
+            guard granted else { return }
+            shouldShowNextApnsSyncNotice = showSyncNotice
+            await MainActor.run {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+        } catch {
+            guard !isCancellationError(error) else { return }
+            notice = error.localizedDescription
+        }
+    }
+
+    func updateNotificationStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        notificationStatus = switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral: "已允许"
+        case .denied: "已拒绝"
+        case .notDetermined: "未请求"
+        @unknown default: "未知"
+        }
+    }
+
+    func syncRemoteNotificationsIfAllowed() async {
+        await updateNotificationStatus()
+        guard isPaired else { return }
+
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional || settings.authorizationStatus == .ephemeral else {
+            return
+        }
+
+        shouldShowNextApnsSyncNotice = false
+        UIApplication.shared.registerForRemoteNotifications()
+    }
+
+    func registerDeviceToken(_ token: String) async {
+        do {
+            let shouldShowNotice = shouldShowNextApnsSyncNotice
+            shouldShowNextApnsSyncNotice = false
+            try await api.register(apnsToken: token)
+            if shouldShowNotice {
+                notice = "APNs token 已同步"
+            }
+        } catch {
+            guard !isCancellationError(error) else { return }
+            shouldShowNextApnsSyncNotice = false
+            notice = error.localizedDescription
+        }
+    }
+
+    func openNotification(kind: String, id: String) {
+        selectedTab = .messages
+        selectedRoute = EventRoute(kind: kind, id: id)
+        Task { await refreshEvents() }
     }
 
     func testConnection() async {

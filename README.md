@@ -15,6 +15,14 @@ Install dependencies:
 pnpm install
 ```
 
+Create local environment settings:
+
+```sh
+cp .env.example .env
+```
+
+Edit `.env` with your local admin token and optional APNs values. The Relay reads `.env` automatically when running local commands, and shell-provided environment variables still take precedence.
+
 Create a Codex client token:
 
 ```sh
@@ -24,13 +32,13 @@ pnpm relay:client
 Start the Relay:
 
 ```sh
-ASKKING_ADMIN_TOKEN=change-me pnpm dev
+pnpm dev
 ```
 
 Create a short-lived iOS pairing code:
 
 ```sh
-ASKKING_ADMIN_TOKEN=change-me pnpm relay:pair
+pnpm relay:pair
 ```
 
 Open `ios/AskKing/AskKing.xcodeproj` in Xcode, set your development team and bundle id, run on an iPhone, then enter:
@@ -39,6 +47,8 @@ Open `ios/AskKing/AskKing.xcodeproj` in Xcode, set your development team and bun
 - Pairing code: the code printed by `pnpm relay:pair`
 
 Configure Codex hooks using [examples/codex-hooks.toml](examples/codex-hooks.toml), replacing the token from `pnpm relay:client`.
+
+For the complete startup, pairing, APNs, and hook installation flow, see [docs/end-to-end-setup.md](docs/end-to-end-setup.md).
 
 Admin endpoints can list and revoke paired clients/devices:
 
@@ -49,9 +59,10 @@ curl -H "authorization: Bearer $ASKKING_ADMIN_TOKEN" http://localhost:8787/api/a
 curl -H "authorization: Bearer $ASKKING_ADMIN_TOKEN" -X POST http://localhost:8787/api/admin/devices/<id>/revoke
 ```
 
-The iOS app registers two APNs categories:
+The iOS app registers APNs categories for notification actions:
 
 - `ASKKING_APPROVAL`: `ASKKING_ALLOW`, `ASKKING_DENY`
+- `ASKKING_APPROVAL_REVIEW`: `ASKKING_ALLOW`, `ASKKING_DENY`
 - `ASKKING_COMPLETION`: `ASKKING_REPLY`
 
 The Relay APNs payloads already use these categories, so lock-screen actions can submit decisions or continuation replies when the iPhone can reach the Relay URL.

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">AskKing App Icon Light</title>
+  <desc id="desc">A light appearance app icon with a gold crown and subtle pastel backdrop.</desc>
+  <defs>
+    <linearGradient id="light-bg" x1="158" y1="102" x2="885" y2="916" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset=".48" stop-color="#F7F9FF"/>
+      <stop offset=".72" stop-color="#EAF6FF"/>
+      <stop offset="1" stop-color="#F4D8FF"/>
+    </linearGradient>
+    <radialGradient id="light-warm" cx="254" cy="188" r="580" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF5C8" stop-opacity=".62"/>
+      <stop offset=".64" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="278" y1="241" x2="705" y2="742" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFCF49"/>
+      <stop offset=".52" stop-color="#F1B623"/>
+      <stop offset="1" stop-color="#D99A16"/>
+    </linearGradient>
+    <linearGradient id="spark-purple" x1="706" y1="257" x2="771" y2="323" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EAB1FF"/>
+      <stop offset="1" stop-color="#A56BEE"/>
+    </linearGradient>
+    <linearGradient id="spark-blue" x1="213" y1="601" x2="271" y2="659" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C4D5FF"/>
+      <stop offset="1" stop-color="#86A4EA"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#light-bg)"/>
+  <rect width="1024" height="1024" fill="url(#light-warm)"/>
+
+  <path d="M852 184l17 38 38 17-38 17-17 38-17-38-38-17 38-17 17-38Z" fill="url(#spark-purple)"/>
+  <path d="M162 602l20 45 45 20-45 20-20 45-20-45-45-20 45-20 20-45Z" fill="url(#spark-blue)"/>
+
+  <g fill="url(#gold)">
+    <path d="M310 694l-67-334 191 159 78-159 78 159 191-159-67 334c-127-34-277-34-404 0Z"/>
+    <path d="M274 752c0-17 12-31 29-34 138-26 280-26 418 0 17 3 29 17 29 34v8c0 21-19 37-40 33-130-23-266-23-396 0-21 4-40-12-40-33v-8Z"/>
+    <circle cx="243" cy="360" r="44"/>
+    <circle cx="512" cy="226" r="52"/>
+    <circle cx="781" cy="360" r="44"/>
+  </g>
+
+  <path d="M512 469l51 80-51 80-51-80 51-80Z" fill="#FFFFFF"/>
+</svg>

@@ -4,22 +4,25 @@ struct RootView: View {
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        TabView {
+        TabView(selection: $appState.selectedTab) {
             NavigationStack {
                 MessagesView()
             }
             .tabItem { Label("消息", systemImage: "message.badge") }
+            .tag(AppTab.messages)
             .badge(appState.events.filter { $0.kind == "approval" && $0.status == "pending" }.count)
 
             NavigationStack {
                 ConnectionView()
             }
             .tabItem { Label("连接", systemImage: "network") }
+            .tag(AppTab.connection)
 
             NavigationStack {
                 SettingsView()
             }
             .tabItem { Label("设置", systemImage: "gearshape") }
+            .tag(AppTab.settings)
         }
         .task {
             await appState.autoDiscoverRelayIfNeeded()

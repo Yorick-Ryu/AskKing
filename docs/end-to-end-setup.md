@@ -1,0 +1,327 @@
+# End-to-End Setup
+
+This guide covers the full local AskKing flow:
+
+- Configure Relay environment variables.
+- Start the Relay.
+- Pair the iOS app.
+- Enable APNs notification delivery.
+- Install Codex hooks.
+- Verify approvals, completion notifications, and replies.
+
+## 1. Install Dependencies
+
+From the repository root:
+
+```sh
+cd /Users/yorick/AIProjects/AskKing
+pnpm install
+```
+
+## 2. Create `.env`
+
+Create a local environment file:
+
+```sh
+cp .env.example .env
+```
+
+Edit `.env`. For basic local polling, these values are enough:
+
+```sh
+ASKKING_PORT=8787
+ASKKING_DB=./askking.sqlite
+ASKKING_ADMIN_TOKEN=change-me
+ASKKING_CLIENT_NAME=Local Codex
+ASKKING_APNS_ENABLED=0
+```
+
+For real APNs notifications, fill these values too:
+
+```sh
+ASKKING_APNS_ENABLED=1
+ASKKING_APNS_KEY_ID=ABC123DEFG
+ASKKING_APNS_TEAM_ID=HYB659G8FH
+ASKKING_APNS_TOPIC=app.askking.relay
+ASKKING_APNS_KEY_PATH=/Users/yorick/Downloads/AuthKey_ABC123DEFG.p8
+ASKKING_APNS_PRODUCTION=0
+```
+
+Use `ASKKING_APNS_PRODUCTION=0` for Xcode development builds. Use `1` only for production APNs builds such as TestFlight or App Store.
+
+`ASKKING_PUBLIC_BASE_URL` can usually stay unset. The Relay will choose the first non-loopback LAN IPv4 address. If the iPhone cannot connect, set it explicitly:
+
+```sh
+ASKKING_PUBLIC_BASE_URL=http://<mac-lan-ip>:8787
+```
+
+## 3. Start Relay
+
+Start the Relay:
+
+```sh
+pnpm dev
+```
+
+Keep this terminal running.
+
+Check health from the Mac:
+
+```sh
+curl http://localhost:8787/health
+```
+
+Check health from iPhone Safari with the LAN URL:
+
+```text
+http://<mac-lan-ip>:8787/health
+```
+
+The iPhone must be able to open that URL before pairing or notification actions can work.
+
+## 4. Pair iPhone
+
+In another terminal, create a pairing code:
+
+```sh
+pnpm relay:pair
+```
+
+The command prints:
+
+```text
+Pairing code: <code>
+Expires at: <timestamp>
+```
+
+In the iOS app:
+
+1. Enter the Relay URL, for example `http://<mac-lan-ip>:8787`.
+2. Or tap automatic LAN discovery.
+3. Enter the pairing code.
+4. Tap pair.
+5. Allow notification permission when prompted, or request it later from Settings.
+
+Pairing code is for the iPhone only. It is short-lived and single-use.
+
+## 5. Enable Apple Push Notifications
+
+This step is only needed for lock-screen/banner notifications. In-app polling works without APNs.
+
+Apple Developer setup:
+
+1. Open Apple Developer Account.
+2. Enable Push Notifications for App ID `app.askking.relay`.
+3. Create an APNs key under Certificates, Identifiers & Profiles -> Keys.
+4. Configure the key as `Sandbox` for local Xcode development.
+5. Use `Team Scoped (All Topics)` unless you specifically want topic restrictions.
+6. Download `AuthKey_XXXXXXXXXX.p8`.
+
+Map Apple values to `.env`:
+
+```sh
+ASKKING_APNS_KEY_ID=XXXXXXXXXX
+ASKKING_APNS_TEAM_ID=HYB659G8FH
+ASKKING_APNS_TOPIC=app.askking.relay
+ASKKING_APNS_KEY_PATH=/absolute/path/to/AuthKey_XXXXXXXXXX.p8
+```
+
+Xcode project requirements:
+
+- Bundle identifier must match `ASKKING_APNS_TOPIC`.
+- Push Notifications capability must be enabled.
+- Entitlements must include `aps-environment = development` for local builds.
+- Run on a real iPhone. Remote APNs delivery cannot be fully tested on a normal simulator flow.
+
+After changing APNs values, restart `pnpm dev`.
+
+## 6. Create Codex Client Token
+
+Create a Codex client token:
+
+```sh
+pnpm relay:client
+```
+
+The command prints:
+
+```text
+Client id: <id>
+Client token: <token>
+```
+
+This token is for the Mac Codex hooks, not for the iPhone.
+
+## 7. Install Codex Hooks
+
+Open the Codex hooks config file:
+
+```text
+/Users/yorick/.codex/hooks.json
+```
+
+Add equivalent hook commands for these events:
+
+- `PermissionRequest`
+- `Stop`
+- `UserPromptSubmit`
+
+Use the client token from `pnpm relay:client`.
+
+Command values should use `localhost` because Codex runs on the same Mac as the Relay:
+
+```sh
+ASKKING_RELAY_URL=http://localhost:8787 ASKKING_CLIENT_TOKEN=<client-token> /Users/yorick/AIProjects/AskKing/hooks/askking_codex_hook.py
+```
+
+For the current JSON hook format, add entries like this:
+
+```json
+{
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ASKKING_RELAY_URL=http://localhost:8787 ASKKING_CLIENT_TOKEN=<client-token> /usr/bin/python3 /Users/yorick/AIProjects/AskKing/hooks/askking_codex_hook.py",
+            "timeout": 650,
+            "statusMessage": "等待 AskKing iOS 审批"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ASKKING_STOP_MODE=wait ASKKING_RELAY_URL=http://localhost:8787 ASKKING_CLIENT_TOKEN=<client-token> /usr/bin/python3 /Users/yorick/AIProjects/AskKing/hooks/askking_codex_hook.py",
+            "timeout": 650,
+            "statusMessage": "发送 AskKing 完成通知"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ASKKING_RELAY_URL=http://localhost:8787 ASKKING_CLIENT_TOKEN=<client-token> /usr/bin/python3 /Users/yorick/AIProjects/AskKing/hooks/askking_codex_hook.py",
+            "timeout": 20,
+            "statusMessage": "同步 AskKing 本机输入"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+If `hooks.json` already contains other hooks, merge the AskKing command objects into the existing event arrays instead of replacing unrelated hooks.
+
+The repository also includes [examples/codex-hooks.toml](../examples/codex-hooks.toml) as a TOML-shaped reference for older or alternate hook config formats.
+
+Optional hook environment variables:
+
+```sh
+ASKKING_APPROVAL_TIMEOUT_SECONDS=600
+ASKKING_STOP_WAIT_SECONDS=600
+ASKKING_STOP_MODE=wait
+ASKKING_COMPLETION_SUMMARY_LIMIT=4000
+```
+
+`ASKKING_STOP_MODE=wait` blocks the Stop hook until the iPhone replies or times out. A text reply continues Codex with that prompt.
+
+`ASKKING_STOP_MODE=notify_only` sends completion notifications but lets Codex finish immediately. In that mode, `UserPromptSubmit` can still sync the next Mac-local prompt back to the latest completion event.
+
+## 8. Verify Flow
+
+Approval flow:
+
+1. Trigger a Codex action that requires approval.
+2. Relay creates an approval event.
+3. iPhone receives it through polling and, if APNs is enabled, a notification.
+4. Approve or deny in the app, or from the notification action.
+5. Codex receives allow or deny from the hook.
+
+Completion flow:
+
+1. Let a Codex turn finish.
+2. Stop hook creates a completion event.
+3. iPhone receives it through polling and, if APNs is enabled, a notification.
+4. Reply with the next instruction in the app or notification.
+5. If `ASKKING_STOP_MODE=wait`, the hook returns that reply to Codex as a continuation prompt.
+
+Manual approval smoke test:
+
+```sh
+CLIENT_TOKEN=<client-token>
+curl -H "authorization: Bearer $CLIENT_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"projectName":"Smoke","commandSummary":"echo hello","ttlSeconds":60}' \
+  http://localhost:8787/api/codex/approvals
+```
+
+Manual completion smoke test:
+
+```sh
+CLIENT_TOKEN=<client-token>
+curl -H "authorization: Bearer $CLIENT_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"projectName":"Smoke","summary":"Smoke completed","ttlSeconds":60}' \
+  http://localhost:8787/api/codex/completions
+```
+
+## 9. Daily Startup Checklist
+
+1. Start Relay:
+
+```sh
+cd /Users/yorick/AIProjects/AskKing
+pnpm dev
+```
+
+2. Confirm iPhone can open:
+
+```text
+http://<mac-lan-ip>:8787/health
+```
+
+3. Open iOS app and confirm it is paired.
+
+4. Start Codex with hooks enabled.
+
+5. Trigger a small approval or completion test.
+
+## Troubleshooting
+
+If iPhone cannot pair:
+
+- Confirm Mac and iPhone are on the same LAN.
+- Open Relay health URL in iPhone Safari.
+- Use the LAN IP in the iOS app, not `localhost`.
+- Generate a fresh pairing code.
+
+If hooks do not trigger iPhone events:
+
+- Confirm Relay is running.
+- Confirm hook command uses `ASKKING_RELAY_URL=http://localhost:8787`.
+- Confirm `ASKKING_CLIENT_TOKEN` is from `pnpm relay:client`.
+- Do not use the iPhone pairing code as the hook client token.
+
+If APNs notifications do not arrive:
+
+- Confirm in-app polling still shows events. If not, fix Relay/pairing first.
+- Confirm iPhone notification permission is allowed.
+- Confirm App ID has Push Notifications enabled in Apple Developer.
+- Confirm `ASKKING_APNS_TOPIC` exactly matches the bundle id.
+- Confirm local Xcode builds use Sandbox and `ASKKING_APNS_PRODUCTION=0`.
+- Confirm Relay logs do not show APNs authentication or device token errors.
+
+If notification actions fail:
+
+- Confirm the iPhone can reach the Relay URL while the action is tapped.
+- On LAN, the iOS app must use the Mac LAN URL, not `localhost`.
+- Confirm the app has recently registered an APNs token after pairing.

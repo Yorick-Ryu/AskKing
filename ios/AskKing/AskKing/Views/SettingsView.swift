@@ -6,7 +6,14 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("设备") {
+                FieldRow("设备名", UIDevice.current.name)
                 FieldRow("设备 ID", UserDefaults.standard.string(forKey: "deviceId") ?? "-")
+                FieldRow("通知权限", appState.notificationStatus)
+                Button {
+                    Task { await appState.requestNotifications() }
+                } label: {
+                    Label("请求通知权限", systemImage: "bell.badge")
+                }
             }
 
             Section("外观") {
@@ -38,5 +45,6 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("设置")
+        .task { await appState.updateNotificationStatus() }
     }
 }

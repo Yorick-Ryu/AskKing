@@ -1,4 +1,7 @@
 node_modules/
+.env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 askking.sqlite
@@ -7,3 +10,4 @@ askking.sqlite-*
 dist/
 ios/AskKing/build/
 DerivedData/
+xcuserdata/
