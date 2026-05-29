@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 await appState?.replyCompletion(id: id, reply: textResponse.userText)
             }
         default:
-            await appState?.openNotification(kind: kind, id: id)
+            appState?.openNotification(kind: kind, id: id)
         }
     }
 }
