@@ -43,18 +43,6 @@ struct ConnectionView: View {
                     }
                 }
             }
-
-            Section("Hook 配置摘要") {
-                Text(appState.hookConfigSummary())
-                    .font(.system(.footnote, design: .monospaced))
-                    .textSelection(.enabled)
-                Button {
-                    UIPasteboard.general.string = appState.hookConfigSummary()
-                    appState.notice = "Hook 配置摘要已复制"
-                } label: {
-                    Label("复制配置摘要", systemImage: "doc.on.doc")
-                }
-            }
         }
         .navigationTitle("连接")
         .task {

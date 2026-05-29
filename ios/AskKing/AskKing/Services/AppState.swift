@@ -30,14 +30,6 @@ final class AppState: ObservableObject {
         UserDefaults.standard.set(relayURLString, forKey: "relayURL")
     }
 
-    func hookConfigSummary() -> String {
-        """
-        ASKKING_RELAY_URL=\(relayURLString)
-        ASKKING_CLIENT_TOKEN=<relay 生成的 client token>
-        hooks/askking_codex_hook.py
-        """
-    }
-
     func pair(code: String) async {
         do {
             saveRelayURL()
