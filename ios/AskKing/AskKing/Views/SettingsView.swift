@@ -40,7 +40,7 @@ struct SettingsView: View {
             Section("关于") {
                 FieldRow("产品", "AskKing")
                 FieldRow("定位", "Agents ask. You decide.")
-                FieldRow("版本", "0.1.0 MVP")
+                FieldRow("版本", appState.appVersionText)
             }
         }
         .navigationTitle("设置")

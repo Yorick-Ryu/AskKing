@@ -135,10 +135,6 @@ private struct ApprovalLiquidGlassActionStyle: ViewModifier {
                         }
                 }
             }
-            .overlay {
-                Capsule()
-                    .strokeBorder(Color.white.opacity(0.38), lineWidth: 0.7)
-            }
             .shadow(color: .black.opacity(0.08), radius: 18, y: 8)
     }
 }

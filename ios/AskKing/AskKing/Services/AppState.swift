@@ -26,6 +26,12 @@ final class AppState: ObservableObject {
         RelayAPI(baseURL: URL(string: relayURLString)!, sessionToken: KeychainStore.get("sessionToken"))
     }
 
+    var appVersionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "-"
+        return "\(version) (\(build))"
+    }
+
     func saveRelayURL() {
         UserDefaults.standard.set(relayURLString, forKey: "relayURL")
     }
