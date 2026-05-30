@@ -229,12 +229,35 @@ Optional hook environment variables:
 ASKKING_APPROVAL_TIMEOUT_SECONDS=600
 ASKKING_STOP_WAIT_SECONDS=600
 ASKKING_STOP_MODE=wait
+ASKKING_HOOK_MODE=full
+ASKKING_HOOK_MODE_FILE=~/.codex/askking-hook-mode.json
 ASKKING_COMPLETION_SUMMARY_LIMIT=4000
 ```
 
-`ASKKING_STOP_MODE=wait` blocks the Stop hook until the iPhone replies or times out. A text reply continues Codex with that prompt.
+`ASKKING_HOOK_MODE` controls the overall AskKing hook behavior:
 
-`ASKKING_STOP_MODE=notify_only` sends completion notifications but lets Codex finish immediately. In that mode, `UserPromptSubmit` can still sync the next Mac-local prompt back to the latest completion event.
+- `off`: no AskKing behavior. Permission and completion hooks return immediately without creating AskKing events.
+- `notify`: notify approval requests and completions, but leave approval and continuation control in Codex.
+- `approval`: hand off approval decisions to iPhone, and only notify completions.
+- `full`: hand off approval decisions to iPhone, notify completions, and wait for iPhone continuation replies.
+
+You can change the mode while Codex is running:
+
+```sh
+pnpm hooks:mode off
+pnpm hooks:mode notify
+pnpm hooks:mode approval
+pnpm hooks:mode full
+pnpm hooks:mode
+```
+
+The command writes `~/.codex/askking-hook-mode.json` by default. Hooks read that file every time they run, and long approval/completion waits re-read it while waiting, so changing from `full` to `notify` or `off` releases the current wait.
+
+`ASKKING_HOOK_MODE` overrides the mode file when set. If neither is set, legacy behavior is preserved: approval is handed off to iPhone, and `ASKKING_STOP_MODE` controls whether Stop waits.
+
+`ASKKING_STOP_MODE=wait` blocks the Stop hook until the iPhone replies or times out when no global hook mode is configured. A text reply continues Codex with that prompt.
+
+`ASKKING_STOP_MODE=notify_only` sends completion notifications but lets Codex finish immediately when no global hook mode is configured. In that mode, `UserPromptSubmit` can still sync the next Mac-local prompt back to the latest completion event.
 
 ## 8. Verify Flow
 

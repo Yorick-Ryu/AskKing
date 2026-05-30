@@ -7,6 +7,7 @@ import { requireAdmin, requireClient, requireDevice, type AppEnv } from "./auth.
 import type { RelayConfig } from "./config.js";
 import { ApnsSender } from "./apns.js";
 import type { RelayStore } from "./store.types.js";
+import type { HookMode } from "./types.js";
 
 function text(value: unknown, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
@@ -29,6 +30,21 @@ function idParam(c: { req: { param: (name: string) => string | undefined } }) {
 function requestTarget(url: string) {
   const parsed = new URL(url);
   return `${parsed.pathname}${parsed.search}`;
+}
+
+function hookMode(value: unknown): HookMode | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "0" || normalized === "off" || normalized === "none" || normalized === "disabled") return "off";
+  if (normalized === "1" || normalized === "2" || normalized === "notify" || normalized === "notify_only") return "notify";
+  if (normalized === "3" || normalized === "approval" || normalized === "approval_only" || normalized === "permission") return "approval";
+  if (normalized === "4" || normalized === "full" || normalized === "wait" || normalized === "all") return "full";
+  return null;
+}
+
+async function hookModeResponse(store: RelayStore) {
+  const mode = await store.getHookMode();
+  return { mode: mode ?? "full", configured: mode !== null };
 }
 
 export function createApp(config: RelayConfig, store: RelayStore) {
@@ -110,6 +126,22 @@ export function createApp(config: RelayConfig, store: RelayStore) {
     return c.json({ events: await store.listEvents(Math.min(Math.max(limit, 1), 100)) });
   });
 
+  app.get("/api/mobile/hook-mode", requireDevice(store), async (c) => {
+    return c.json(await hookModeResponse(store));
+  });
+
+  app.post("/api/mobile/hook-mode", requireDevice(store), async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const mode = hookMode(body.mode);
+    if (!mode) return c.json({ error: "mode_must_be_off_notify_approval_or_full" }, 400);
+    return c.json({ mode: await store.setHookMode(mode) });
+  });
+
+  app.delete("/api/mobile/hook-mode", requireDevice(store), async (c) => {
+    await store.clearHookMode();
+    return c.json(await hookModeResponse(store));
+  });
+
   app.get("/api/mobile/approvals/:id", requireDevice(store), async (c) => {
     const approval = await store.getApproval(idParam(c));
     if (!approval) return c.json({ error: "not_found" }, 404);
@@ -160,6 +192,22 @@ export function createApp(config: RelayConfig, store: RelayStore) {
       .then((devices) => apns.sendApproval(devices, approval))
       .catch((error) => console.error("[apns] approval failed", error));
     return c.json({ approval });
+  });
+
+  app.get("/api/codex/hook-mode", requireClient(store), async (c) => {
+    return c.json(await hookModeResponse(store));
+  });
+
+  app.post("/api/codex/hook-mode", requireClient(store), async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const mode = hookMode(body.mode);
+    if (!mode) return c.json({ error: "mode_must_be_off_notify_approval_or_full" }, 400);
+    return c.json({ mode: await store.setHookMode(mode) });
+  });
+
+  app.delete("/api/codex/hook-mode", requireClient(store), async (c) => {
+    await store.clearHookMode();
+    return c.json(await hookModeResponse(store));
   });
 
   app.get("/api/codex/approvals/:id", requireClient(store), async (c) => {

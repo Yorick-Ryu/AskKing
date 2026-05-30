@@ -10,18 +10,21 @@ const dbPath = join(workDir, "askking.sqlite");
 const adminToken = "dev-admin-token";
 
 let server;
+let globalClientToken;
 
 try {
   const clientOutput = await run("node", ["dist/cli.js", "client", "SmokeClient", "SmokeProject"], {
     ASKKING_DB: dbPath
   });
   const clientToken = match(clientOutput, /Client token: (.+)/);
+  globalClientToken = clientToken;
 
   server = spawn("node", ["dist/index.js"], {
     cwd: process.cwd(),
     env: {
       ...process.env,
       ASKKING_DB: dbPath,
+      ASKKING_ADMIN_TOKEN: adminToken,
       ASKKING_PORT: String(port)
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -58,6 +61,32 @@ try {
     })
   });
   assert(paired.sessionToken.startsWith("ios_"), "device receives iOS session token");
+
+  const defaultHookMode = await requestJson(`${baseUrl}/api/mobile/hook-mode`, {
+    headers: authHeaders(paired.sessionToken)
+  });
+  assert(defaultHookMode.mode === "full", "hook mode defaults to full");
+  assert(defaultHookMode.configured === false, "default hook mode is not explicitly configured");
+
+  const mobileHookMode = await requestJson(`${baseUrl}/api/mobile/hook-mode`, {
+    method: "POST",
+    headers: authHeaders(paired.sessionToken),
+    body: JSON.stringify({ mode: "notify" })
+  });
+  assert(mobileHookMode.mode === "notify", "mobile can set hook mode");
+
+  const codexHookMode = await requestJson(`${baseUrl}/api/codex/hook-mode`, {
+    headers: authHeaders(clientToken)
+  });
+  assert(codexHookMode.mode === "notify", "Codex can read relay hook mode");
+  assert(codexHookMode.configured === true, "relay hook mode reports explicit configuration");
+
+  const clearedHookMode = await requestJson(`${baseUrl}/api/codex/hook-mode`, {
+    method: "DELETE",
+    headers: authHeaders(clientToken)
+  });
+  assert(clearedHookMode.mode === "full", "Codex can clear hook mode to default");
+  assert(clearedHookMode.configured === false, "cleared hook mode is not explicitly configured");
 
   const decided = await requestJson(`${baseUrl}/api/mobile/approvals/${approval.approval.id}/decision`, {
     method: "POST",
@@ -287,6 +316,103 @@ try {
     "PermissionRequest hook falls back to default Codex approval on timeout"
   );
 
+  await setRelayHookMode("off");
+  const offPermissionHookOutput = await runHook({
+    hookEventName: "PermissionRequest",
+    eventId: "hook-permission-off-smoke",
+    projectName: "Smoke",
+    cwd: process.cwd(),
+    model: "smoke-model",
+    command: "echo hook off",
+    reason: "Smoke test off request"
+  }, clientToken, {
+  });
+  assert(offPermissionHookOutput === "{}", "off mode skips PermissionRequest handoff");
+  await sleep(500);
+  const offPermissionEvents = await listEvents(paired.sessionToken);
+  assert(!offPermissionEvents.some((event) => event.kind === "approval" && event.summary === "echo hook off"), "off mode does not create approval notifications");
+
+  const offStopHookOutput = await runHook({
+    hookEventName: "Stop",
+    eventId: "hook-stop-off-smoke",
+    projectName: "Smoke",
+    cwd: process.cwd(),
+    model: "smoke-model",
+    summary: "Hook stop off."
+  }, clientToken, {
+  });
+  assert(offStopHookOutput === "{}", "off mode skips Stop handoff");
+  await sleep(500);
+  const offStopEvents = await listEvents(paired.sessionToken);
+  assert(!offStopEvents.some((event) => event.kind === "completion" && event.summary === "Hook stop off."), "off mode does not create completion notifications");
+
+  await setRelayHookMode("notify");
+  const notifyPermissionHookOutput = await runHook({
+    hookEventName: "PermissionRequest",
+    eventId: "hook-permission-notify-smoke",
+    projectName: "Smoke",
+    cwd: process.cwd(),
+    model: "smoke-model",
+    command: "echo hook notify",
+    reason: "Smoke test notify request"
+  }, clientToken, {
+  });
+  assert(notifyPermissionHookOutput === "{}", "notify mode lets Codex keep local approval control");
+  await waitForEvent(paired.sessionToken, "approval", "echo hook notify");
+
+  const notifyStopHookOutput = await runHook({
+    hookEventName: "Stop",
+    eventId: "hook-stop-notify-mode-smoke",
+    projectName: "Smoke",
+    cwd: process.cwd(),
+    model: "smoke-model",
+    summary: "Hook stop notify mode."
+  }, clientToken, {
+    ASKKING_STOP_WAIT_SECONDS: "20"
+  });
+  assert(notifyStopHookOutput === "{}", "notify mode does not wait for completion replies");
+  const notifyModeCompletionEvent = await waitForEvent(paired.sessionToken, "completion", "Hook stop notify mode.");
+  assert(notifyModeCompletionEvent.status === "notified", "notify mode creates notified completion");
+
+  await setRelayHookMode("approval");
+  const approvalModePermissionHook = runHook({
+    hookEventName: "PermissionRequest",
+    eventId: "hook-permission-approval-mode-smoke",
+    projectName: "Smoke",
+    cwd: process.cwd(),
+    model: "smoke-model",
+    command: "echo hook approval mode",
+    reason: "Smoke test approval mode request"
+  }, clientToken, {
+    ASKKING_APPROVAL_TIMEOUT_SECONDS: "20"
+  });
+  const approvalModeEvent = await waitForEvent(paired.sessionToken, "approval", "echo hook approval mode");
+  await requestJson(`${baseUrl}/api/mobile/approvals/${approvalModeEvent.id}/decision`, {
+    method: "POST",
+    headers: authHeaders(paired.sessionToken),
+    body: JSON.stringify({ decision: "allow" })
+  });
+  const approvalModePermissionHookOutput = JSON.parse(await approvalModePermissionHook);
+  assert(
+    approvalModePermissionHookOutput.hookSpecificOutput?.decision?.behavior === "allow",
+    "approval mode hands off PermissionRequest decisions"
+  );
+
+  const approvalModeStopHookOutput = await runHook({
+    hookEventName: "Stop",
+    eventId: "hook-stop-approval-mode-smoke",
+    projectName: "Smoke",
+    cwd: process.cwd(),
+    model: "smoke-model",
+    summary: "Hook stop approval mode."
+  }, clientToken, {
+    ASKKING_STOP_WAIT_SECONDS: "20"
+  });
+  assert(approvalModeStopHookOutput === "{}", "approval mode only notifies completions");
+  const approvalModeCompletionEvent = await waitForEvent(paired.sessionToken, "completion", "Hook stop approval mode.");
+  assert(approvalModeCompletionEvent.status === "notified", "approval mode creates notified completion");
+
+  await setRelayHookMode("full");
   const stopHook = runHook({
     hookEventName: "Stop",
     eventId: "hook-stop-smoke",
@@ -319,10 +445,25 @@ try {
   });
   assert(stopHookWithoutReply === "{}", "Stop hook returns empty JSON when no continuation reply arrives");
 
+  const stopHookModeChange = runHook({
+    hookEventName: "Stop",
+    eventId: "hook-stop-mode-change-smoke",
+    projectName: "Smoke",
+    cwd: process.cwd(),
+    model: "smoke-model",
+    summary: "Hook stop mode change."
+  }, clientToken, {
+    ASKKING_STOP_WAIT_SECONDS: "20"
+  });
+  await waitForEvent(paired.sessionToken, "completion", "Hook stop mode change.");
+  await setRelayHookMode("notify");
+  assert(await stopHookModeChange === "{}", "Stop hook exits wait when mode changes away from full");
+  await clearRelayHookMode();
+
   const stopHookNotifyOnly = await runHook({
     hookEventName: "Stop",
     eventId: "hook-stop-notify-only-smoke",
-    sessionId: "hook-notify-only-session",
+    session_id: "hook-notify-only-session",
     projectName: "Smoke",
     cwd: process.cwd(),
     model: "smoke-model",
@@ -338,7 +479,7 @@ try {
   const userPromptSubmitOutput = await runHook({
     hookEventName: "UserPromptSubmit",
     eventId: "hook-user-prompt-submit-smoke",
-    sessionId: "hook-notify-only-session",
+    session_id: "hook-notify-only-session",
     projectName: "Smoke",
     cwd: process.cwd(),
     model: "smoke-model",
@@ -416,14 +557,38 @@ async function waitForServer(child, url) {
 async function waitForEvent(sessionToken, kind, summary) {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
-    const response = await requestJson(`${baseUrl}/api/mobile/events?limit=100`, {
-      headers: { authorization: `Bearer ${sessionToken}` }
-    });
+    const response = { events: await listEvents(sessionToken) };
     const event = response.events.find((item) => item.kind === kind && item.summary === summary);
     if (event) return event;
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await sleep(250);
   }
   throw new Error(`Timed out waiting for ${kind} event with summary ${summary}`);
+}
+
+async function listEvents(sessionToken) {
+  const response = await requestJson(`${baseUrl}/api/mobile/events?limit=100`, {
+    headers: { authorization: `Bearer ${sessionToken}` }
+  });
+  return response.events;
+}
+
+async function setRelayHookMode(mode) {
+  await requestJson(`${baseUrl}/api/codex/hook-mode`, {
+    method: "POST",
+    headers: authHeaders(globalClientToken),
+    body: JSON.stringify({ mode })
+  });
+}
+
+async function clearRelayHookMode() {
+  await requestJson(`${baseUrl}/api/codex/hook-mode`, {
+    method: "DELETE",
+    headers: authHeaders(globalClientToken)
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function runHook(payload, clientToken, extraEnv = {}) {

@@ -8,7 +8,9 @@
     "smoke:local": "node scripts/smoke-local.mjs",
     "typecheck": "tsc --noEmit",
     "relay:pair": "tsx relay/src/cli.ts pair",
-    "relay:client": "tsx relay/src/cli.ts client"
+    "relay:client": "tsx relay/src/cli.ts client",
+    "relay:mode": "tsx relay/src/cli.ts mode",
+    "hooks:mode": "python3 scripts/askking_hook_mode.py"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.830.0",

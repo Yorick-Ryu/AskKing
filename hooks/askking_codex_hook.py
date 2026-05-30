@@ -14,9 +14,85 @@ CLIENT_TOKEN = os.environ.get("ASKKING_CLIENT_TOKEN", "")
 APPROVAL_TIMEOUT_SECONDS = int(os.environ.get("ASKKING_APPROVAL_TIMEOUT_SECONDS", "600"))
 STOP_WAIT_SECONDS = int(os.environ.get("ASKKING_STOP_WAIT_SECONDS", "600"))
 STOP_MODE = os.environ.get("ASKKING_STOP_MODE", "wait").strip().lower()
+HOOK_MODE = os.environ.get("ASKKING_HOOK_MODE", "").strip().lower()
+HOOK_MODE_FILE = os.environ.get(
+    "ASKKING_HOOK_MODE_FILE",
+    os.path.expanduser("~/.codex/askking-hook-mode.json"),
+)
 COMPLETION_SUMMARY_LIMIT = int(os.environ.get("ASKKING_COMPLETION_SUMMARY_LIMIT", "4000"))
 CURRENT_COMPLETION_ID: Optional[str] = None
 COMPUTER_HANDOFF_REPLY = "交接给电脑"
+
+
+MODE_ALIASES = {
+    "0": "off",
+    "disable": "off",
+    "disabled": "off",
+    "none": "off",
+    "noop": "off",
+    "off": "off",
+    "无": "off",
+    "无行为": "off",
+    "1": "notify",
+    "notification": "notify",
+    "notification_only": "notify",
+    "notify": "notify",
+    "notify_only": "notify",
+    "仅通知": "notify",
+    "只通知": "notify",
+    "2": "notify",
+    "3": "approval",
+    "approval": "approval",
+    "approval_only": "approval",
+    "approval_notify": "approval",
+    "approval_notify_completion": "approval",
+    "handoff_approval": "approval",
+    "permission": "approval",
+    "permission_only": "approval",
+    "仅交接审批": "approval",
+    "仅交接审批并通知完成": "approval",
+    "4": "full",
+    "all": "full",
+    "full": "full",
+    "wait": "full",
+    "全量": "full",
+}
+
+
+MODE_BEHAVIOR = {
+    "off": {
+        "enabled": False,
+        "notify_approval": False,
+        "handoff_approval": False,
+        "notify_completion": False,
+        "handoff_completion": False,
+        "sync_local_prompt": False,
+    },
+    "notify": {
+        "enabled": True,
+        "notify_approval": True,
+        "handoff_approval": False,
+        "notify_completion": True,
+        "handoff_completion": False,
+        "sync_local_prompt": True,
+    },
+    "approval": {
+        "enabled": True,
+        "notify_approval": True,
+        "handoff_approval": True,
+        "notify_completion": True,
+        "handoff_completion": False,
+        "sync_local_prompt": True,
+    },
+    "full": {
+        "enabled": True,
+        "notify_approval": True,
+        "handoff_approval": True,
+        "notify_completion": True,
+        "handoff_completion": True,
+        "sync_local_prompt": True,
+    },
+}
 
 
 def post(path: str, payload: Dict[str, Any], timeout: int = 10) -> Dict[str, Any]:
@@ -34,14 +110,52 @@ def post(path: str, payload: Dict[str, Any], timeout: int = 10) -> Dict[str, Any
         return json.loads(response.read().decode("utf-8"))
 
 
-def get(path: str) -> Dict[str, Any]:
+def get(path: str, timeout: int = 65) -> Dict[str, Any]:
     req = urllib.request.Request(
         f"{BASE_URL}{path}",
         headers={"authorization": f"Bearer {CLIENT_TOKEN}"},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=65) as response:
+    with urllib.request.urlopen(req, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def normalize_mode(value: str) -> str:
+    return MODE_ALIASES.get(value.strip().lower(), "")
+
+
+def legacy_default_mode() -> str:
+    if STOP_MODE in ("notify", "notify_only", "notification_only", "none", "0"):
+        return "approval"
+    return "full"
+
+
+def read_hook_mode() -> str:
+    env_mode = normalize_mode(HOOK_MODE)
+    if env_mode:
+        return env_mode
+    if CLIENT_TOKEN:
+        try:
+            relay_payload = get("/api/codex/hook-mode", timeout=2)
+            relay_mode = normalize_mode(str(relay_payload.get("mode", "")))
+            if relay_payload.get("configured") is True and relay_mode:
+                return relay_mode
+        except (urllib.error.URLError, urllib.error.HTTPError, KeyError, json.JSONDecodeError, TimeoutError):
+            pass
+    try:
+        with open(os.path.expanduser(HOOK_MODE_FILE), encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if isinstance(payload, dict):
+            file_mode = normalize_mode(str(payload.get("mode", "")))
+            if file_mode:
+                return file_mode
+    except (OSError, json.JSONDecodeError):
+        pass
+    return legacy_default_mode()
+
+
+def current_behavior() -> Dict[str, bool]:
+    return MODE_BEHAVIOR[read_hook_mode()]
 
 
 def deny(reason: str) -> None:
@@ -166,7 +280,8 @@ def handle_exit_signal(_signum: int, _frame: Any) -> None:
 
 
 def handle_permission(payload: Dict[str, Any]) -> None:
-    if not CLIENT_TOKEN:
+    behavior = current_behavior()
+    if not CLIENT_TOKEN or not behavior["enabled"] or not behavior["notify_approval"]:
         permission_fallback()
         return
     try:
@@ -199,8 +314,14 @@ def handle_permission(payload: Dict[str, Any]) -> None:
             "ttlSeconds": APPROVAL_TIMEOUT_SECONDS,
         })
         approval = created["approval"]
+        if not behavior["handoff_approval"]:
+            permission_fallback()
+            return
         deadline = time.time() + APPROVAL_TIMEOUT_SECONDS
         while time.time() < deadline:
+            if not current_behavior()["handoff_approval"]:
+                permission_fallback()
+                return
             waited = get(f"/api/codex/approvals/{approval['id']}/wait?timeoutMs=30000")["approval"]
             if waited["status"] == "allowed":
                 allow()
@@ -218,11 +339,12 @@ def handle_permission(payload: Dict[str, Any]) -> None:
 
 def handle_stop(payload: Dict[str, Any]) -> None:
     global CURRENT_COMPLETION_ID
-    if not CLIENT_TOKEN:
+    behavior = current_behavior()
+    if not CLIENT_TOKEN or not behavior["enabled"] or not behavior["notify_completion"]:
         stop_ok()
         return
     try:
-        wait_for_reply = STOP_MODE not in ("notify", "notify_only", "notification_only", "none", "0")
+        wait_for_reply = behavior["handoff_completion"]
         created = post("/api/codex/completions", {
             "eventId": first_string(payload, "eventId", "event_id", "turnId", "turn_id", default=str(time.time())),
             "projectName": project_name(payload),
@@ -240,6 +362,9 @@ def handle_stop(payload: Dict[str, Any]) -> None:
             return
         deadline = time.time() + STOP_WAIT_SECONDS
         while time.time() < deadline:
+            if not current_behavior()["handoff_completion"]:
+                stop_ok()
+                return
             waited = get(f"/api/codex/completions/{completion['id']}/wait?timeoutMs=30000")["completion"]
             if waited["status"] == "replied" and waited.get("reply"):
                 if waited["reply"].strip() == COMPUTER_HANDOFF_REPLY:
@@ -260,7 +385,8 @@ def handle_stop(payload: Dict[str, Any]) -> None:
 
 
 def handle_user_prompt_submit(payload: Dict[str, Any]) -> None:
-    if not CLIENT_TOKEN:
+    behavior = current_behavior()
+    if not CLIENT_TOKEN or not behavior["enabled"] or not behavior["sync_local_prompt"]:
         stop_ok()
         return
     prompt = first_string(payload, "prompt", "userPrompt", "user_prompt", "message")

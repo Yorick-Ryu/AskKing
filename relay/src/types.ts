@@ -1,5 +1,6 @@
 export type ApprovalStatus = "pending" | "allowed" | "denied" | "expired";
 export type CompletionStatus = "notified" | "waiting" | "replied" | "interrupted" | "expired";
+export type HookMode = "off" | "notify" | "approval" | "full";
 
 export type ApprovalRequest = {
   id: string;

@@ -9,7 +9,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { randomCode, randomToken, sha256 } from "./crypto.js";
 import type { RelayStore, EventListItem } from "./store.types.js";
-import type { ApprovalRequest, CompletionEvent, CodexClient, Device } from "./types.js";
+import type { ApprovalRequest, CompletionEvent, CodexClient, Device, HookMode } from "./types.js";
 
 type DynamoStoreConfig = {
   clientsTable: string;
@@ -26,6 +26,8 @@ function ttlFromIso(value: string) {
 function enabled(row: { enabled?: number | boolean } | undefined) {
   return row?.enabled === undefined || row.enabled === true || row.enabled === 1;
 }
+
+const HOOK_MODE_KEY = "__setting#hook_mode";
 
 export class DynamoStore implements RelayStore {
   private db: DynamoDBDocumentClient;
@@ -90,6 +92,7 @@ export class DynamoStore implements RelayStore {
       TableName: this.config.clientsTable
     }));
     return ((result.Items ?? []) as CodexClient[])
+      .filter((item) => Boolean(item.id))
       .map((item) => ({ ...item, clientTokenHash: (item as unknown as { tokenHash?: string }).tokenHash ?? item.clientTokenHash }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
@@ -380,6 +383,35 @@ export class DynamoStore implements RelayStore {
       }
     })).catch(() => undefined);
     return this.getCompletion(current.id);
+  }
+
+  async getHookMode(): Promise<HookMode | null> {
+    const result = await this.db.send(new GetCommand({
+      TableName: this.config.clientsTable,
+      Key: { tokenHash: HOOK_MODE_KEY }
+    }));
+    const value = (result.Item as { value?: string } | undefined)?.value;
+    if (value === "off" || value === "notify" || value === "approval" || value === "full") return value;
+    return null;
+  }
+
+  async setHookMode(mode: HookMode): Promise<HookMode> {
+    await this.db.send(new PutCommand({
+      TableName: this.config.clientsTable,
+      Item: {
+        tokenHash: HOOK_MODE_KEY,
+        value: mode,
+        updatedAt: new Date().toISOString()
+      }
+    }));
+    return mode;
+  }
+
+  async clearHookMode(): Promise<void> {
+    await this.db.send(new DeleteCommand({
+      TableName: this.config.clientsTable,
+      Key: { tokenHash: HOOK_MODE_KEY }
+    }));
   }
 
   async listEvents(limit = 50): Promise<EventListItem[]> {

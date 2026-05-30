@@ -1,4 +1,4 @@
-import type { ApprovalRequest, CompletionEvent, CodexClient, Device } from "./types.js";
+import type { ApprovalRequest, CompletionEvent, CodexClient, Device, HookMode } from "./types.js";
 
 export type MaybePromise<T> = T | Promise<T>;
 
@@ -55,6 +55,9 @@ export interface RelayStore {
     sessionKey: string;
     prompt: string;
   }): MaybePromise<CompletionEvent | null>;
+  getHookMode(): MaybePromise<HookMode | null>;
+  setHookMode(mode: HookMode): MaybePromise<HookMode>;
+  clearHookMode(): MaybePromise<void>;
   listEvents(limit?: number): MaybePromise<EventListItem[]>;
   expireOld(): MaybePromise<void>;
 }

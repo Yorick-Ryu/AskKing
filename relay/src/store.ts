@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { randomCode, randomToken, sha256 } from "./crypto.js";
-import type { ApprovalRequest, CompletionEvent, CodexClient, Device } from "./types.js";
+import type { ApprovalRequest, CompletionEvent, CodexClient, Device, HookMode } from "./types.js";
 import type { EventListItem, RelayStore } from "./store.types.js";
 
 export class Store implements RelayStore {
@@ -68,6 +68,11 @@ export class Store implements RelayStore {
         expires_at text not null,
         reply text,
         replied_at text
+      );
+      create table if not exists settings (
+        key text primary key,
+        value text not null,
+        updated_at text not null
       );
     `);
     const completionColumns = this.db.prepare("pragma table_info(completions)").all() as { name: string }[];
@@ -265,6 +270,27 @@ export class Store implements RelayStore {
       where id = ? and status in ('waiting', 'notified', 'interrupted')
     `).run(input.prompt, new Date().toISOString(), current.id);
     return this.getCompletion(current.id);
+  }
+
+  getHookMode(): HookMode | null {
+    const row = this.db.prepare("select value from settings where key = 'hook_mode'").get() as { value: string } | undefined;
+    if (row?.value === "off" || row?.value === "notify" || row?.value === "approval" || row?.value === "full") {
+      return row.value;
+    }
+    return null;
+  }
+
+  setHookMode(mode: HookMode): HookMode {
+    this.db.prepare(`
+      insert into settings (key, value, updated_at)
+      values ('hook_mode', ?, ?)
+      on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at
+    `).run(mode, new Date().toISOString());
+    return mode;
+  }
+
+  clearHookMode() {
+    this.db.prepare("delete from settings where key = 'hook_mode'").run();
   }
 
   listEvents(limit = 50): EventListItem[] {
