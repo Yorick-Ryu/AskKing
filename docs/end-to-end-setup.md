@@ -132,31 +132,31 @@ Install and trust the AskKing Codex plugin:
 
 1. Add the AskKing marketplace from the shell:
 
-```sh
-codex plugin marketplace add Yorick-Ryu/AskKing
-```
+    ```sh
+    codex plugin marketplace add Yorick-Ryu/AskKing
+    ```
 
 2. Open Codex:
 
-```sh
-codex
-```
+    ```sh
+    codex
+    ```
 
 3. In Codex, open the plugin browser:
 
-```text
-/plugins
-```
+    ```text
+    /plugins
+    ```
 
-In the plugin browser, find AskKing and install or enable it.
+    In the plugin browser, find AskKing and install or enable it.
 
-4. After AskKing is enabled, then run:
+4. After AskKing is enabled, restart Codex if requested, then run:
 
-```text
-/hooks
-```
+    ```text
+    /hooks
+    ```
 
-Review and trust the AskKing hooks.
+    Review and trust the AskKing hooks.
 
 The AskKing plugin is packaged in this repository:
 
@@ -245,56 +245,3 @@ curl -H "authorization: Bearer $CLIENT_TOKEN" \
   -d '{"projectName":"Smoke","summary":"Smoke completed","ttlSeconds":60}' \
   http://localhost:8787/api/codex/completions
 ```
-
-## 8. Daily Startup Checklist
-
-1. Start Relay:
-
-```sh
-cd /Users/yorick/AIProjects/AskKing
-npx askking@latest
-```
-
-2. Confirm iPhone can open:
-
-```text
-http://<mac-lan-ip>:8787/health
-```
-
-3. Open iOS app and confirm it is paired.
-
-4. Start Codex, run `/plugins` to confirm AskKing is installed or enabled, then run `/hooks` to confirm the AskKing hooks are trusted.
-
-5. Trigger a small approval or completion test.
-
-## Troubleshooting
-
-If iPhone cannot pair:
-
-- Confirm Mac and iPhone are on the same LAN.
-- Start `npx askking@latest` with no paired devices and scan the printed QR code.
-- Open Relay health URL in iPhone Safari.
-- Use the LAN IP in the iOS app if entering the Relay URL manually, not `localhost`.
-- Generate a fresh pairing code with `npx askking@latest pair` if the startup QR code expired.
-
-If hooks do not trigger iPhone events:
-
-- Confirm Relay is running.
-- Confirm `~/.codex/askking/config.json` exists and contains `relayUrl` plus `clientToken`.
-- Run `/hooks` in Codex and confirm the AskKing plugin hooks are trusted.
-- Do not use the iPhone pairing code as the hook client token.
-
-If APNs notifications do not arrive:
-
-- Confirm in-app polling still shows events. If not, fix Relay/pairing first.
-- Confirm iPhone notification permission is allowed.
-- Confirm App ID has Push Notifications enabled in Apple Developer.
-- Confirm `ASKKING_APNS_TOPIC` exactly matches the bundle id.
-- Confirm local Xcode builds use Sandbox and `ASKKING_APNS_PRODUCTION=0`.
-- Confirm Relay logs do not show APNs authentication or device token errors.
-
-If notification actions fail:
-
-- Confirm the iPhone can reach the Relay URL while the action is tapped.
-- On LAN, the iOS app must use the Mac LAN URL, not `localhost`.
-- Confirm the app has recently registered an APNs token after pairing.
