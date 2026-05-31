@@ -6,12 +6,14 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("设备") {
-                FieldRow("设备 ID", KeychainStore.get("deviceId") ?? "-")
-                FieldRow("通知权限", appState.notificationStatus)
-                Button {
-                    Task { await appState.requestNotifications() }
-                } label: {
-                    Label("请求通知权限", systemImage: "bell.badge")
+                FieldRow("设备 ID", AppState.deviceId ?? "-")
+                FieldRow("通知权限", appState.notificationStatusText)
+                if appState.canRequestNotificationPermission {
+                    Button {
+                        Task { await appState.requestNotifications() }
+                    } label: {
+                        Label("请求通知权限", systemImage: "bell.badge")
+                    }
                 }
             }
 
@@ -24,22 +26,7 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
             }
 
-            Section("本地数据") {
-                Button {
-                    appState.events = []
-                } label: {
-                    Label("清理本地缓存", systemImage: "trash")
-                }
-                Button(role: .destructive) {
-                    appState.logout()
-                } label: {
-                    Label("退出配对", systemImage: "xmark.circle")
-                }
-            }
-
             Section("关于") {
-                FieldRow("产品", "AskKing")
-                FieldRow("定位", "Agents ask. You decide.")
                 FieldRow("版本", appState.appVersionText)
             }
         }

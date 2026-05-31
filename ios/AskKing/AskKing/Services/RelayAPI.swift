@@ -17,6 +17,10 @@ struct RelayAPI {
         let _: EmptyResponse = try await request("api/mobile/device-token", method: "PUT", body: ["apnsToken": apnsToken], authenticated: true)
     }
 
+    func unpairDevice() async throws {
+        let _: EmptyResponse = try await request("api/mobile/device", method: "DELETE", body: Optional<String>.none, authenticated: true)
+    }
+
     func events() async throws -> [EventItem] {
         let response: EventsResponse = try await request("api/mobile/events", method: "GET", body: Optional<String>.none, authenticated: true)
         return response.events

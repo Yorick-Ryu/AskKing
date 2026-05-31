@@ -38,6 +38,30 @@ struct EventRoute: Hashable {
     let id: String
 }
 
+struct AskKingPairingPayload {
+    let relayURLString: String
+    let code: String
+
+    init?(rawValue: String) {
+        guard
+            let components = URLComponents(string: rawValue),
+            components.scheme == "askking",
+            components.host == "pair"
+        else { return nil }
+
+        let items = components.queryItems ?? []
+        guard
+            let relayURL = items.first(where: { $0.name == "relayUrl" })?.value,
+            let code = items.first(where: { $0.name == "code" })?.value,
+            URL(string: relayURL) != nil,
+            !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+
+        self.relayURLString = relayURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        self.code = code
+    }
+}
+
 struct EventItem: Identifiable, Codable, Hashable {
     let kind: String
     let id: String

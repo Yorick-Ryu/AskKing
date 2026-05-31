@@ -5,24 +5,30 @@ import UserNotifications
 
 @MainActor
 final class AppState: ObservableObject {
-    @Published var relayURLString = UserDefaults.standard.string(forKey: "relayURL") ?? "http://localhost:8787"
-    @Published var isPaired = KeychainStore.get("sessionToken") != nil
+    @Published var relayURLString: String
+    @Published var isPaired: Bool
     @Published var events: [EventItem] = []
-    @Published var connectionStatus = "未测试"
+    @Published var connectionStatus = "离线"
     @Published var isDiscoveringRelay = false
+    @Published var isTestingConnection = false
     @Published var notice: String?
     @Published var selectedRoute: EventRoute?
     @Published var selectedTab: AppTab = .messages
-    @Published var notificationStatus = "未知"
-    @Published var appearance: AppearanceMode = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "system") ?? .system {
+    @Published var notificationStatus: UNAuthorizationStatus = .notDetermined
+    @Published var appearance: AppearanceMode {
         didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
     }
 
     private var pollingTask: Task<Void, Never>?
-    private var shouldShowNextApnsSyncNotice = false
+
+    init() {
+        relayURLString = UserDefaults.standard.string(forKey: "relayURL") ?? "http://localhost:8787"
+        isPaired = Self.sessionToken != nil
+        appearance = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "system") ?? .system
+    }
 
     var api: RelayAPI {
-        RelayAPI(baseURL: URL(string: relayURLString)!, sessionToken: KeychainStore.get("sessionToken"))
+        RelayAPI(baseURL: URL(string: relayURLString)!, sessionToken: Self.sessionToken)
     }
 
     var appVersionText: String {
@@ -31,19 +37,49 @@ final class AppState: ObservableObject {
         return "\(version) (\(build))"
     }
 
+    static var sessionToken: String? {
+        KeychainStore.get("sessionToken")
+    }
+
+    static var deviceId: String? {
+        KeychainStore.get("deviceId")
+    }
+
     func saveRelayURL() {
         UserDefaults.standard.set(relayURLString, forKey: "relayURL")
     }
 
+    func prepareLocalNetworkAccess() async {
+        guard !isPaired else { return }
+        _ = await RelayDiscovery.find(timeout: 1.5)
+    }
+
+    func prepareNetworkAccess() async {
+        guard !isPaired else { return }
+        async let localNetwork: Void = prepareLocalNetworkAccess()
+        async let internetNetwork: Void = prepareInternetAccess()
+        _ = await (localNetwork, internetNetwork)
+    }
+
+    private func prepareInternetAccess() async {
+        guard let url = URL(string: "https://captive.apple.com/hotspot-detect.html") else { return }
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 2
+        config.timeoutIntervalForResource = 2
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        _ = try? await session.data(from: url)
+    }
+
     func pair(code: String) async {
         do {
+            let trimmedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
             saveRelayURL()
-            let response = try await api.pair(code: code)
+            let response = try await api.pair(code: trimmedCode)
             KeychainStore.set(response.sessionToken, for: "sessionToken")
             KeychainStore.set(response.deviceId, for: "deviceId")
             isPaired = true
-            notice = "配对完成"
-            await requestNotifications(showSyncNotice: false)
+            await requestNotifications()
             await refreshEvents()
             startPolling()
         } catch {
@@ -52,17 +88,23 @@ final class AppState: ObservableObject {
         }
     }
 
-    func requestNotifications(showSyncNotice: Bool = true) async {
+    func pair(scannedValue: String) async {
+        guard let payload = AskKingPairingPayload(rawValue: scannedValue) else {
+            notice = "二维码不是 AskKing 配对信息"
+            return
+        }
+        relayURLString = payload.relayURLString
+        await pair(code: payload.code)
+    }
+
+    func requestNotifications() async {
         do {
             let center = UNUserNotificationCenter.current()
             NotificationActions.register()
             let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
             await updateNotificationStatus()
             guard granted else { return }
-            shouldShowNextApnsSyncNotice = showSyncNotice
-            await MainActor.run {
-                UIApplication.shared.registerForRemoteNotifications()
-            }
+            registerForRemoteNotificationsIfPaired()
         } catch {
             guard !isCancellationError(error) else { return }
             notice = error.localizedDescription
@@ -71,12 +113,20 @@ final class AppState: ObservableObject {
 
     func updateNotificationStatus() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
-        notificationStatus = switch settings.authorizationStatus {
+        notificationStatus = settings.authorizationStatus
+    }
+
+    var notificationStatusText: String {
+        switch notificationStatus {
         case .authorized, .provisional, .ephemeral: "已允许"
         case .denied: "已拒绝"
         case .notDetermined: "未请求"
         @unknown default: "未知"
         }
+    }
+
+    var canRequestNotificationPermission: Bool {
+        notificationStatus == .notDetermined
     }
 
     func syncRemoteNotificationsIfAllowed() async {
@@ -88,21 +138,19 @@ final class AppState: ObservableObject {
             return
         }
 
-        shouldShowNextApnsSyncNotice = false
+        registerForRemoteNotificationsIfPaired()
+    }
+
+    private func registerForRemoteNotificationsIfPaired() {
+        guard isPaired else { return }
         UIApplication.shared.registerForRemoteNotifications()
     }
 
     func registerDeviceToken(_ token: String) async {
         do {
-            let shouldShowNotice = shouldShowNextApnsSyncNotice
-            shouldShowNextApnsSyncNotice = false
             try await api.register(apnsToken: token)
-            if shouldShowNotice {
-                notice = "APNs token 已同步"
-            }
         } catch {
             guard !isCancellationError(error) else { return }
-            shouldShowNextApnsSyncNotice = false
             notice = error.localizedDescription
         }
     }
@@ -114,12 +162,16 @@ final class AppState: ObservableObject {
     }
 
     func testConnection() async {
+        guard !isTestingConnection else { return }
+        isTestingConnection = true
+        defer { isTestingConnection = false }
+
         do {
             saveRelayURL()
             connectionStatus = try await api.health() ? "在线" : "异常"
         } catch {
             guard !isCancellationError(error) else { return }
-            connectionStatus = error.localizedDescription
+            connectionStatus = "离线"
         }
     }
 
@@ -142,12 +194,20 @@ final class AppState: ObservableObject {
     }
 
     func refreshEvents() async {
+        await refreshEvents(showsError: true)
+    }
+
+    func refreshEvents(showsError: Bool) async {
         guard isPaired else { return }
         do {
             events = try await api.events()
+            connectionStatus = "在线"
         } catch {
             guard !isCancellationError(error) else { return }
-            notice = error.localizedDescription
+            connectionStatus = "离线"
+            if showsError {
+                notice = error.localizedDescription
+            }
         }
     }
 
@@ -155,7 +215,7 @@ final class AppState: ObservableObject {
         guard isPaired, pollingTask == nil else { return }
         pollingTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.refreshEvents()
+                await self?.refreshEvents(showsError: false)
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
             }
         }
@@ -198,12 +258,24 @@ final class AppState: ObservableObject {
         }
     }
 
-    func logout() {
+    func logout() async {
         stopPolling()
+        do {
+            try await api.unpairDevice()
+            clearLocalPairing()
+        } catch {
+            guard !isCancellationError(error) else { return }
+            startPolling()
+            notice = error.localizedDescription
+        }
+    }
+
+    private func clearLocalPairing() {
         KeychainStore.delete("sessionToken")
         KeychainStore.delete("deviceId")
         isPaired = false
         events = []
+        connectionStatus = "离线"
     }
 
     private static func findRelay() async -> URL? {

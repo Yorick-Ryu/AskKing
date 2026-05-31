@@ -67,7 +67,9 @@ npx askking@latest
 
 Keep this terminal running.
 
-For local iOS discovery, the Relay advertises a Bonjour service named `AskKing Relay` with service type `_askking._tcp`. Set `ASKKING_BONJOUR_ENABLED=0` to disable this, or `ASKKING_BONJOUR_NAME=<name>` to change the advertised name.
+On first startup with no paired devices, the Relay prints a QR code that contains the Mac LAN Relay URL and a short-lived pairing code. The iOS app can scan this code and pair without LAN service discovery.
+
+Bonjour is still published as a fallback with service type `_askking._tcp`. Set `ASKKING_BONJOUR_ENABLED=0` to disable this, or `ASKKING_BONJOUR_NAME=<name>` to change the advertised name.
 
 Check health from the Mac:
 
@@ -85,26 +87,11 @@ The iPhone must be able to open that URL before pairing or notification actions 
 
 ## 4. Pair iPhone
 
-In another terminal, create a pairing code:
-
-```sh
-npx askking@latest pair
-```
-
-The command prints:
-
-```text
-Pairing code: <code>
-Expires at: <timestamp>
-```
-
 In the iOS app:
 
-1. Tap automatic discovery to find the local Relay over Bonjour.
-2. Or enter the Relay URL manually, for example `http://<mac-lan-ip>:8787`.
-3. Enter the pairing code.
-4. Tap pair.
-5. Allow notification permission when prompted, or request it later from Settings.
+1. Tap scan pairing QR code.
+2. Scan the QR code printed by `npx askking@latest`.
+3. Allow notification permission when prompted, or request it later from Settings.
 
 Pairing code is for the iPhone only. It is short-lived and single-use.
 
@@ -141,23 +128,35 @@ After changing APNs values, restart the Relay.
 
 ## 6. Install AskKing Codex Plugin
 
-Add the AskKing marketplace from GitHub:
+Install and trust the AskKing Codex plugin:
+
+1. Add the AskKing marketplace from the shell:
 
 ```sh
 codex plugin marketplace add Yorick-Ryu/AskKing
 ```
 
-Open Codex and install AskKing from the plugin browser:
+2. Open Codex:
+
+```sh
+codex
+```
+
+3. In Codex, open the plugin browser:
 
 ```text
 /plugins
 ```
 
-The hooks are bundled with the plugin and load automatically after the plugin is enabled. The local Relay creates `~/.codex/askking/config.json` automatically when it starts.
+In the plugin browser, find AskKing and install or enable it.
 
-This token is for the Mac Codex hooks, not for the iPhone. It is intentionally stored outside the plugin hook definition, so rotating the token does not change the hook command that Codex reviews.
+4. After AskKing is enabled, then run:
 
-## 7. Enable and Trust Plugin Hooks
+```text
+/hooks
+```
+
+Review and trust the AskKing hooks.
 
 The AskKing plugin is packaged in this repository:
 
@@ -177,13 +176,7 @@ The repo-local marketplace entry is:
 .agents/plugins/marketplace.json
 ```
 
-Install or enable the AskKing plugin in Codex, restart Codex if requested, then run:
-
-```text
-/hooks
-```
-
-Review and trust the AskKing hooks loaded from the plugin. Codex requires this review for command hooks, including hooks supplied by plugins.
+Codex requires this review for command hooks, including hooks supplied by plugins.
 
 Optional hook environment variables:
 
@@ -215,7 +208,7 @@ The command writes the mode to the Relay database. Hooks ask the Relay for the c
 
 `ASKKING_HOOK_MODE` overrides the Relay mode when set. If neither is set, AskKing defaults to `full`.
 
-## 8. Verify Flow
+## 7. Verify Flow
 
 Approval flow:
 
@@ -253,7 +246,7 @@ curl -H "authorization: Bearer $CLIENT_TOKEN" \
   http://localhost:8787/api/codex/completions
 ```
 
-## 9. Daily Startup Checklist
+## 8. Daily Startup Checklist
 
 1. Start Relay:
 
@@ -270,7 +263,7 @@ http://<mac-lan-ip>:8787/health
 
 3. Open iOS app and confirm it is paired.
 
-4. Start Codex with hooks enabled.
+4. Start Codex, run `/plugins` to confirm AskKing is installed or enabled, then run `/hooks` to confirm the AskKing hooks are trusted.
 
 5. Trigger a small approval or completion test.
 
@@ -279,10 +272,10 @@ http://<mac-lan-ip>:8787/health
 If iPhone cannot pair:
 
 - Confirm Mac and iPhone are on the same LAN.
-- Tap automatic discovery again. If Bonjour/mDNS is blocked by the network, enter the Mac LAN URL manually.
+- Start `npx askking@latest` with no paired devices and scan the printed QR code.
 - Open Relay health URL in iPhone Safari.
-- Use the LAN IP in the iOS app, not `localhost`.
-- Generate a fresh pairing code.
+- Use the LAN IP in the iOS app if entering the Relay URL manually, not `localhost`.
+- Generate a fresh pairing code with `npx askking@latest pair` if the startup QR code expired.
 
 If hooks do not trigger iPhone events:
 

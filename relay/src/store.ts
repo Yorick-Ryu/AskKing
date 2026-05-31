@@ -160,7 +160,7 @@ export class Store implements RelayStore {
   }
 
   revokeDevice(deviceId: string) {
-    const result = this.db.prepare("update devices set enabled = 0, last_seen_at = ? where id = ?").run(new Date().toISOString(), deviceId);
+    const result = this.db.prepare("update devices set enabled = 0, apns_token = null, last_seen_at = ? where id = ?").run(new Date().toISOString(), deviceId);
     return result.changes > 0;
   }
 

@@ -19,8 +19,8 @@ Then report the resulting mode in one short sentence.
 
 ## Flow Commands
 
-- Start the local relay: `npx askking@latest`
-- Create an iOS pairing code: `npx askking@latest pair`
+- Start the local relay and show the first-run iOS pairing QR code: `npx askking@latest`
+- Create a fresh iOS pairing code manually: `npx askking@latest pair`
 - Run local automated verification: `pnpm smoke:local`
 
 ## Modes

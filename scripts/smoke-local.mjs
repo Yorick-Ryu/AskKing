@@ -26,6 +26,7 @@ try {
       ASKKING_DB: dbPath,
       ASKKING_ADMIN_TOKEN: adminToken,
       ASKKING_WRITE_CODEX_CONFIG: "0",
+      ASKKING_PAIR_ON_START: "0",
       ASKKING_PORT: String(port)
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -165,6 +166,38 @@ try {
     headers: { authorization: `Bearer ${extraDevice.sessionToken}` }
   }, false);
   assert(revokedDeviceResponse.status === 401, "revoked iOS session token is rejected");
+
+  const logoutPairing = await requestJson(`${baseUrl}/api/admin/pairing-code`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${adminToken}` }
+  });
+  const logoutDevice = await requestJson(`${baseUrl}/api/devices/pair`, {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({
+      code: logoutPairing.code,
+      name: "Logout iPhone"
+    })
+  });
+  await requestJson(`${baseUrl}/api/mobile/device-token`, {
+    method: "PUT",
+    headers: authHeaders(logoutDevice.sessionToken),
+    body: JSON.stringify({ apnsToken: "apns-smoke-token" })
+  });
+  await requestJson(`${baseUrl}/api/mobile/device`, {
+    method: "DELETE",
+    headers: authHeaders(logoutDevice.sessionToken)
+  });
+  const loggedOutDeviceResponse = await request(`${baseUrl}/api/mobile/events`, {
+    headers: authHeaders(logoutDevice.sessionToken)
+  }, false);
+  assert(loggedOutDeviceResponse.status === 401, "logged-out iOS session token is rejected");
+  const devicesAfterLogout = await requestJson(`${baseUrl}/api/admin/devices`, {
+    headers: { authorization: `Bearer ${adminToken}` }
+  });
+  const loggedOutDevice = devicesAfterLogout.devices.find((device) => device.id === logoutDevice.deviceId);
+  assert(loggedOutDevice?.enabled === 0, "logged-out iOS device is disabled server-side");
+  assert(!loggedOutDevice?.apnsToken, "logged-out iOS device APNs token is cleared");
 
   const completion = await requestJson(`${baseUrl}/api/codex/completions`, {
     method: "POST",
@@ -506,6 +539,34 @@ try {
   });
   await waitForEvent(paired.sessionToken, "completion", "Finished real work from the assistant message.");
   assert(await stopHookWithAssistantMessage === "{}", "Stop hook summary falls back to last assistant message");
+
+  await requestJson(`${baseUrl}/api/admin/devices/${paired.deviceId}/revoke`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${adminToken}` }
+  });
+  await setRelayHookMode("full");
+  const noDeviceStopStartedAt = Date.now();
+  const noDeviceStopHookOutput = await runHook({
+    hookEventName: "Stop",
+    eventId: "hook-stop-no-device-smoke",
+    projectName: "Smoke",
+    cwd: process.cwd(),
+    model: "smoke-model",
+    summary: "Hook stop no device."
+  }, clientToken, {
+    ASKKING_STOP_WAIT_SECONDS: "20"
+  });
+  assert(noDeviceStopHookOutput === "{}", "Stop hook returns immediately when no push devices are available");
+  assert(Date.now() - noDeviceStopStartedAt < 5000, "Stop hook does not wait for timeout with no push devices");
+  const noDeviceEvents = await requestJson(`${baseUrl}/api/admin/devices`, {
+    headers: { authorization: `Bearer ${adminToken}` }
+  });
+  assert(noDeviceEvents.devices.every((device) => device.enabled === 0), "No push devices remain available");
+  const noDeviceCompletionStatus = (await run("sqlite3", [
+    dbPath,
+    "select status from completions where event_id = 'hook-stop-no-device-smoke';"
+  ])).trim();
+  assert(noDeviceCompletionStatus === "notified", "No-device Stop hook records completion without waiting for a reply");
 
   console.log("AskKing local smoke test passed");
 } finally {

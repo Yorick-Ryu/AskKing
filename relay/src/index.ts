@@ -5,6 +5,7 @@ import { loadConfig } from "./config.js";
 import { createApp } from "./app.js";
 import { Store } from "./store.js";
 import { publishBonjourRelay, type BonjourPublisher } from "./bonjour.js";
+import { printPairingQr } from "./pairing-qr.js";
 
 function askKingCodexConfigPath() {
   const home = process.env.HOME;
@@ -44,6 +45,20 @@ function ensureLocalCodexClientConfig(config: ReturnType<typeof loadConfig>, sto
   console.log(`AskKing Codex config: ${path}`);
 }
 
+function printNewPairingQr(config: ReturnType<typeof loadConfig>, store: Store) {
+  const pairing = store.createPairingCode();
+  printPairingQr({
+    relayUrl: config.publicBaseUrl,
+    code: pairing.code,
+    expiresAt: pairing.expiresAt
+  });
+}
+
+function scheduleStartupPairingQr(config: ReturnType<typeof loadConfig>, store: Store) {
+  if (process.env.ASKKING_PAIR_ON_START === "0") return;
+  printNewPairingQr(config, store);
+}
+
 export function startRelay() {
   const config = loadConfig();
   const store = new Store(config.databasePath);
@@ -57,6 +72,7 @@ export function startRelay() {
     if (!config.publicBaseUrl.includes("localhost")) {
       console.log(`AskKing Relay LAN URL: ${config.publicBaseUrl}`);
     }
+    scheduleStartupPairingQr(config, store);
     void publishBonjourRelay(config).then((publisher) => {
       bonjourPublisher = publisher;
     });

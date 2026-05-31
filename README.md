@@ -1,13 +1,13 @@
 # AskKing
 
-AskKing is a Codex iOS approval relay MVP. It provides:
+AskKing is a Codex iOS approval relay. It provides:
 
 - A local TypeScript/Hono Relay backed by SQLite.
 - A Codex plugin with hooks and a Python hook adapter for `PermissionRequest`, `Stop`, and `UserPromptSubmit`.
 - A SwiftUI iOS client for pairing, approvals, completion events, and continuation replies.
 - Notification actions for approval allow/deny and completion text replies.
 
-## Local MVP
+## Local Setup
 
 Install dependencies:
 
@@ -23,15 +23,35 @@ cp .env.example .env
 
 Edit `.env` with your local admin token and optional APNs values. The Relay reads `.env` automatically when running local commands, and shell-provided environment variables still take precedence.
 
-Add the AskKing plugin marketplace:
+Install and trust the AskKing Codex plugin:
+
+1. Add the AskKing marketplace from the shell:
 
 ```sh
 codex plugin marketplace add Yorick-Ryu/AskKing
+```
+
+2. Open Codex:
+
+```sh
 codex
+```
+
+3. In Codex, open the plugin browser:
+
+```text
 /plugins
 ```
 
-Install AskKing from the plugin browser. The hooks are bundled with the plugin and load automatically after the plugin is enabled. The local Relay creates the Codex client config automatically when it starts. Restart Codex if requested, then run `/hooks` to review and trust the AskKing hooks. This is required by Codex's hook safety model.
+In the plugin browser, find AskKing and install or enable it.
+
+4. After AskKing is enabled, restart Codex if requested, then run:
+
+```text
+/hooks
+```
+
+Review and trust the AskKing hooks.
 
 Start the Relay:
 
@@ -39,19 +59,12 @@ Start the Relay:
 npx askking@latest
 ```
 
-Create a short-lived iOS pairing code:
-
-```sh
-npx askking@latest pair
-```
-
 Open `ios/AskKing/AskKing.xcodeproj` in Xcode, set your development team and bundle id, run on an iPhone, then connect:
 
-- Tap automatic discovery to find the local Relay over Bonjour.
-- Or enter the Mac LAN address manually, for example `http://192.168.1.23:8787`.
-- Pairing code: the code printed by `npx askking@latest pair`
+- Tap scan pairing QR code.
+- Scan the QR code printed by `npx askking@latest`.
 
-Bonjour discovery publishes `_askking._tcp` from the local Relay. Disable it with `ASKKING_BONJOUR_ENABLED=0`, or rename the advertised service with `ASKKING_BONJOUR_NAME`.
+The QR code contains the Mac LAN Relay URL and a short-lived pairing code, so the iOS app does not need LAN service discovery for the normal setup flow. Bonjour discovery is still published as a fallback; disable it with `ASKKING_BONJOUR_ENABLED=0`, or rename the advertised service with `ASKKING_BONJOUR_NAME`.
 
 The plugin lives at [plugins/askking](plugins/askking). It includes the hook definitions, an AskKing skill, and a hook entrypoint that reads the generated local Relay token from `~/.codex/askking/config.json`.
 
@@ -96,7 +109,7 @@ ASKKING_APNS_KEY_SECRET_ID=arn:aws:secretsmanager:...:secret:askking/apns-...
 
 ## Public Deployment Path
 
-The local Relay keeps business logic behind storage and push interfaces. The MVP public path is AWS Lambda + DynamoDB:
+The local Relay keeps business logic behind storage and push interfaces. The public deployment path is AWS Lambda + DynamoDB:
 
 - Lambda entrypoint: [relay/src/lambda.ts](relay/src/lambda.ts).
 - DynamoDB store: [relay/src/dynamo-store.ts](relay/src/dynamo-store.ts).

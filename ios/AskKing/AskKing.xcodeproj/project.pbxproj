@@ -21,6 +21,8 @@
 		A0000000000000000000000C /* Views/MarkdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001E /* Views/MarkdownText.swift */; };
 		A0000000000000000000000D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001F /* Assets.xcassets */; };
 		A0000000000000000000000E /* Services/RelayDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000021 /* Services/RelayDiscovery.swift */; };
+		A0000000000000000000000F /* Views/OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000022 /* Views/OnboardingView.swift */; };
+		A00000000000000000000023 /* Views/PairingScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000024 /* Views/PairingScannerView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +43,8 @@
 		A0000000000000000000001E /* Views/MarkdownText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/MarkdownText.swift; sourceTree = "<group>"; };
 		A0000000000000000000001F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A00000000000000000000021 /* Services/RelayDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/RelayDiscovery.swift; sourceTree = "<group>"; };
+		A00000000000000000000022 /* Views/OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/OnboardingView.swift; sourceTree = "<group>"; };
+		A00000000000000000000024 /* Views/PairingScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/PairingScannerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -80,10 +84,12 @@
 				A00000000000000000000015 /* Services/AppState.swift */,
 				A00000000000000000000021 /* Services/RelayDiscovery.swift */,
 				A00000000000000000000016 /* Views/RootView.swift */,
+				A00000000000000000000022 /* Views/OnboardingView.swift */,
 				A00000000000000000000017 /* Views/MessagesView.swift */,
 				A00000000000000000000018 /* Views/ApprovalDetailView.swift */,
 				A00000000000000000000019 /* Views/CompletionDetailView.swift */,
 				A0000000000000000000001A /* Views/ConnectionView.swift */,
+				A00000000000000000000024 /* Views/PairingScannerView.swift */,
 				A0000000000000000000001B /* Views/SettingsView.swift */,
 				A0000000000000000000001E /* Views/MarkdownText.swift */,
 				A0000000000000000000001F /* Assets.xcassets */,
@@ -181,6 +187,8 @@
 				A0000000000000000000000B /* Views/SettingsView.swift in Sources */,
 				A0000000000000000000000C /* Views/MarkdownText.swift in Sources */,
 				A0000000000000000000000E /* Services/RelayDiscovery.swift in Sources */,
+				A0000000000000000000000F /* Views/OnboardingView.swift in Sources */,
+				A00000000000000000000023 /* Views/PairingScannerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

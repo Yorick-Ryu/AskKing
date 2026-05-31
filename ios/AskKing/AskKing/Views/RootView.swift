@@ -4,6 +4,23 @@ struct RootView: View {
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
+        Group {
+            if appState.isPaired {
+                pairedTabs
+            } else {
+                NavigationStack {
+                    OnboardingView()
+                }
+            }
+        }
+        .alert("AskKing", isPresented: Binding(get: { appState.notice != nil }, set: { if !$0 { appState.notice = nil } })) {
+            Button("好", role: .cancel) { appState.notice = nil }
+        } message: {
+            Text(appState.notice ?? "")
+        }
+    }
+
+    private var pairedTabs: some View {
         TabView(selection: $appState.selectedTab) {
             NavigationStack {
                 MessagesView()
@@ -27,11 +44,6 @@ struct RootView: View {
         .task {
             await appState.refreshEvents()
             appState.startPolling()
-        }
-        .alert("AskKing", isPresented: Binding(get: { appState.notice != nil }, set: { if !$0 { appState.notice = nil } })) {
-            Button("好", role: .cancel) { appState.notice = nil }
-        } message: {
-            Text(appState.notice ?? "")
         }
     }
 }

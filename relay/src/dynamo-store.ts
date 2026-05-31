@@ -202,7 +202,7 @@ export class DynamoStore implements RelayStore {
     await this.db.send(new UpdateCommand({
       TableName: this.config.devicesTable,
       Key: { sessionTokenHash: device.sessionTokenHash },
-      UpdateExpression: "set enabled = :disabled, lastSeenAt = :now",
+      UpdateExpression: "set enabled = :disabled, lastSeenAt = :now remove apnsToken",
       ExpressionAttributeValues: { ":disabled": 0, ":now": new Date().toISOString() }
     }));
     return true;

@@ -121,6 +121,12 @@ export function createApp(config: RelayConfig, store: RelayStore) {
     return c.json({ ok: true });
   });
 
+  app.delete("/api/mobile/device", requireDevice(store), async (c) => {
+    const revoked = await store.revokeDevice(c.get("deviceId")!);
+    if (!revoked) return c.json({ error: "not_found" }, 404);
+    return c.json({ ok: true });
+  });
+
   app.get("/api/mobile/events", requireDevice(store), async (c) => {
     const limit = Number(c.req.query("limit") ?? "50");
     return c.json({ events: await store.listEvents(Math.min(Math.max(limit, 1), 100)) });
@@ -231,6 +237,10 @@ export function createApp(config: RelayConfig, store: RelayStore) {
 
   app.post("/api/codex/completions", requireClient(store), async (c) => {
     const body = await c.req.json().catch(() => ({}));
+    const devices = await store.listDevices();
+    const hasReplyDevice = devices.some((device) => Boolean(device.enabled));
+    const pushDevices = await store.listPushDevices();
+    const waitForReply = body.waitForReply !== false && hasReplyDevice;
     const completion = await store.createCompletion({
       clientId: c.get("clientId")!,
       eventId: text(body.eventId, randomUUID()),
@@ -239,11 +249,10 @@ export function createApp(config: RelayConfig, store: RelayStore) {
       model: text(body.model),
       sessionKey: text(body.sessionKey),
       summary: redact(text(body.summary, "Codex turn completed.")),
-      status: body.waitForReply === false ? "notified" : "waiting",
+      status: waitForReply ? "waiting" : "notified",
       expiresAt: expiresIn(Number(body.ttlSeconds ?? 45))
     });
-    Promise.resolve(store.listPushDevices())
-      .then((devices) => apns.sendCompletion(devices, completion))
+    Promise.resolve(apns.sendCompletion(pushDevices, completion))
       .catch((error) => console.error("[apns] completion failed", error));
     return c.json({ completion });
   });

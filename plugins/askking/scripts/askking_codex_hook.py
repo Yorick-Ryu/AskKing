@@ -332,7 +332,7 @@ def handle_stop(payload: Dict[str, Any]) -> None:
         })
         completion = created["completion"]
         CURRENT_COMPLETION_ID = completion["id"]
-        if not wait_for_reply or STOP_WAIT_SECONDS <= 0:
+        if not wait_for_reply or STOP_WAIT_SECONDS <= 0 or completion.get("status") != "waiting":
             stop_ok()
             return
         deadline = time.time() + STOP_WAIT_SECONDS
