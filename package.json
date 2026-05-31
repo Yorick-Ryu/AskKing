@@ -10,8 +10,7 @@
     "plugins",
     ".agents",
     ".env.example",
-    "README.md",
-    "docs"
+    "README.md"
   ],
   "scripts": {
     "build": "tsc",

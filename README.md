@@ -68,7 +68,7 @@ The QR code contains the Mac LAN Relay URL and a short-lived pairing code, so th
 
 The plugin lives at [plugins/askking](plugins/askking). It includes the hook definitions, an AskKing skill, and a hook entrypoint that reads the generated local Relay token from `~/.codex/askking/config.json`.
 
-For the complete startup, pairing, APNs, and hook installation flow, see [docs/end-to-end-setup.md](docs/end-to-end-setup.md).
+For the complete startup, pairing, APNs, and hook installation flow, see [docs/end-to-end-setup.md](https://github.com/Yorick-Ryu/AskKing/blob/main/docs/end-to-end-setup.md).
 
 Admin endpoints can list and revoke paired clients/devices:
 
@@ -114,7 +114,7 @@ The local Relay keeps business logic behind storage and push interfaces. The pub
 - Lambda entrypoint: [relay/src/lambda.ts](relay/src/lambda.ts).
 - DynamoDB store: [relay/src/dynamo-store.ts](relay/src/dynamo-store.ts).
 - SAM template: [infra/aws-sam/template.yaml](infra/aws-sam/template.yaml).
-- Deployment notes: [docs/aws-lambda-deployment.md](docs/aws-lambda-deployment.md).
+- Deployment notes: [docs/aws-lambda-deployment.md](https://github.com/Yorick-Ryu/AskKing/blob/main/docs/aws-lambda-deployment.md).
 
 The public adapter:
 
