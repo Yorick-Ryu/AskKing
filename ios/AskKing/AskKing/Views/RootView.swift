@@ -25,7 +25,6 @@ struct RootView: View {
             .tag(AppTab.settings)
         }
         .task {
-            await appState.autoDiscoverRelayIfNeeded()
             await appState.refreshEvents()
             appState.startPolling()
         }

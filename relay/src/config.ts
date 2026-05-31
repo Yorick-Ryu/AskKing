@@ -5,6 +5,8 @@ export type RelayConfig = {
   port: number;
   databasePath: string;
   publicBaseUrl: string;
+  bonjourEnabled: boolean;
+  bonjourName: string;
   adminToken: string;
   defaultClientName: string;
   apns: {
@@ -58,6 +60,8 @@ export function loadConfig(): RelayConfig {
     port,
     databasePath: process.env.ASKKING_DB ?? "./askking.sqlite",
     publicBaseUrl: process.env.ASKKING_PUBLIC_BASE_URL ?? defaultPublicBaseUrl,
+    bonjourEnabled: process.env.ASKKING_BONJOUR_ENABLED !== "0",
+    bonjourName: process.env.ASKKING_BONJOUR_NAME ?? "AskKing Relay",
     adminToken: process.env.ASKKING_ADMIN_TOKEN ?? "dev-admin-token",
     defaultClientName: process.env.ASKKING_CLIENT_NAME ?? "Local Codex",
     apns: {

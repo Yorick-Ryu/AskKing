@@ -39,6 +39,10 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_askking._tcp</string>
+	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>AskKing 需要访问局域网中的 Relay，以便在应用内接收 Codex 审批和完成消息。</string>
 </dict>

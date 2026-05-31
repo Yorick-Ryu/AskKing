@@ -45,8 +45,5 @@ struct ConnectionView: View {
             }
         }
         .navigationTitle("连接")
-        .task {
-            await appState.autoDiscoverRelayIfNeeded()
-        }
     }
 }

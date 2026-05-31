@@ -41,10 +41,13 @@ Create a short-lived iOS pairing code:
 pnpm relay:pair
 ```
 
-Open `ios/AskKing/AskKing.xcodeproj` in Xcode, set your development team and bundle id, run on an iPhone, then enter:
+Open `ios/AskKing/AskKing.xcodeproj` in Xcode, set your development team and bundle id, run on an iPhone, then connect:
 
-- Relay URL: the Mac LAN address, for example `http://192.168.1.23:8787`
+- Tap automatic discovery to find the local Relay over Bonjour.
+- Or enter the Mac LAN address manually, for example `http://192.168.1.23:8787`.
 - Pairing code: the code printed by `pnpm relay:pair`
+
+Bonjour discovery publishes `_askking._tcp` from the local Relay. Disable it with `ASKKING_BONJOUR_ENABLED=0`, or rename the advertised service with `ASKKING_BONJOUR_NAME`.
 
 Configure Codex hooks using [examples/codex-hooks.toml](examples/codex-hooks.toml), replacing the token from `pnpm relay:client`.
 

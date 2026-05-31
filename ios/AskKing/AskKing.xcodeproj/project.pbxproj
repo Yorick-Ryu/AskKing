@@ -20,6 +20,7 @@
 		A0000000000000000000000B /* Views/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001B /* Views/SettingsView.swift */; };
 		A0000000000000000000000C /* Views/MarkdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001E /* Views/MarkdownText.swift */; };
 		A0000000000000000000000D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001F /* Assets.xcassets */; };
+		A0000000000000000000000E /* Services/RelayDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000021 /* Services/RelayDiscovery.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +40,7 @@
 		A0000000000000000000001D /* AskKing.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AskKing.entitlements; sourceTree = "<group>"; };
 		A0000000000000000000001E /* Views/MarkdownText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/MarkdownText.swift; sourceTree = "<group>"; };
 		A0000000000000000000001F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A00000000000000000000021 /* Services/RelayDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/RelayDiscovery.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,6 +78,7 @@
 				A00000000000000000000013 /* Services/KeychainStore.swift */,
 				A00000000000000000000014 /* Services/RelayAPI.swift */,
 				A00000000000000000000015 /* Services/AppState.swift */,
+				A00000000000000000000021 /* Services/RelayDiscovery.swift */,
 				A00000000000000000000016 /* Views/RootView.swift */,
 				A00000000000000000000017 /* Views/MessagesView.swift */,
 				A00000000000000000000018 /* Views/ApprovalDetailView.swift */,
@@ -177,6 +180,7 @@
 				A0000000000000000000000A /* Views/ConnectionView.swift in Sources */,
 				A0000000000000000000000B /* Views/SettingsView.swift in Sources */,
 				A0000000000000000000000C /* Views/MarkdownText.swift in Sources */,
+				A0000000000000000000000E /* Services/RelayDiscovery.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

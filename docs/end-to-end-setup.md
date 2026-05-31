@@ -33,6 +33,8 @@ ASKKING_PORT=8787
 ASKKING_DB=./askking.sqlite
 ASKKING_ADMIN_TOKEN=change-me
 ASKKING_CLIENT_NAME=Local Codex
+ASKKING_BONJOUR_ENABLED=1
+ASKKING_BONJOUR_NAME=AskKing Relay
 ASKKING_APNS_ENABLED=0
 ```
 
@@ -65,6 +67,8 @@ pnpm dev
 
 Keep this terminal running.
 
+For local iOS discovery, the Relay advertises a Bonjour service named `AskKing Relay` with service type `_askking._tcp`. Set `ASKKING_BONJOUR_ENABLED=0` to disable this, or `ASKKING_BONJOUR_NAME=<name>` to change the advertised name.
+
 Check health from the Mac:
 
 ```sh
@@ -96,8 +100,8 @@ Expires at: <timestamp>
 
 In the iOS app:
 
-1. Enter the Relay URL, for example `http://<mac-lan-ip>:8787`.
-2. Or tap automatic LAN discovery.
+1. Tap automatic discovery to find the local Relay over Bonjour.
+2. Or enter the Relay URL manually, for example `http://<mac-lan-ip>:8787`.
 3. Enter the pairing code.
 4. Tap pair.
 5. Allow notification permission when prompted, or request it later from Settings.
@@ -323,6 +327,7 @@ http://<mac-lan-ip>:8787/health
 If iPhone cannot pair:
 
 - Confirm Mac and iPhone are on the same LAN.
+- Tap automatic discovery again. If Bonjour/mDNS is blocked by the network, enter the Mac LAN URL manually.
 - Open Relay health URL in iPhone Safari.
 - Use the LAN IP in the iOS app, not `localhost`.
 - Generate a fresh pairing code.

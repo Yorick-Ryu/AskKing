@@ -2,7 +2,6 @@ import Foundation
 import SwiftUI
 import UIKit
 import UserNotifications
-import Darwin
 
 @MainActor
 final class AppState: ObservableObject {
@@ -124,45 +123,22 @@ final class AppState: ObservableObject {
         }
     }
 
-    func autoDiscoverRelayIfNeeded() async {
-        guard shouldAutoDiscoverRelay else { return }
-        await discoverRelay(silent: true)
-    }
-
     func discoverRelay() async {
-        await discoverRelay(silent: false)
-    }
-
-    private var shouldAutoDiscoverRelay: Bool {
-        guard let url = URL(string: relayURLString), let host = url.host?.lowercased() else {
-            return true
-        }
-        return host == "localhost" || host == "127.0.0.1" || host == "::1"
-    }
-
-    private func discoverRelay(silent: Bool) async {
         guard !isDiscoveringRelay else { return }
         isDiscoveringRelay = true
-        if !silent {
-            connectionStatus = "正在扫描局域网"
-        }
+        connectionStatus = "正在查找 Relay"
         defer { isDiscoveringRelay = false }
 
-        let port = URL(string: relayURLString)?.port ?? 8787
-        guard let relayURL = await Self.findRelay(port: port) else {
-            if !silent {
-                connectionStatus = "未找到 Relay"
-                notice = "没有在当前局域网发现 AskKing Relay"
-            }
+        guard let relayURL = await Self.findRelay() else {
+            connectionStatus = "未找到 Relay"
+            notice = "没有在当前局域网发现 AskKing Relay"
             return
         }
 
         relayURLString = relayURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         saveRelayURL()
         connectionStatus = "在线"
-        if !silent {
-            notice = "已发现 Relay：\(relayURLString)"
-        }
+        notice = "已发现 Relay：\(relayURLString)"
     }
 
     func refreshEvents() async {
@@ -230,29 +206,15 @@ final class AppState: ObservableObject {
         events = []
     }
 
-    private static func findRelay(port: Int) async -> URL? {
-        let candidates = localSubnetCandidates(port: port)
-        return await withTaskGroup(of: URL?.self) { group in
-            for url in candidates {
-                group.addTask {
-                    await isRelayHealthy(url) ? url : nil
-                }
-            }
-
-            for await url in group {
-                if let url {
-                    group.cancelAll()
-                    return url
-                }
-            }
-            return nil
-        }
+    private static func findRelay() async -> URL? {
+        guard let url = await RelayDiscovery.find() else { return nil }
+        return await isRelayHealthy(url) ? url : nil
     }
 
     private static func isRelayHealthy(_ baseURL: URL) async -> Bool {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 0.35
-        config.timeoutIntervalForResource = 0.35
+        config.timeoutIntervalForRequest = 2
+        config.timeoutIntervalForResource = 2
         let session = URLSession(configuration: config)
         defer { session.invalidateAndCancel() }
 
@@ -262,46 +224,6 @@ final class AppState: ObservableObject {
         } catch {
             return false
         }
-    }
-
-    private static func localSubnetCandidates(port: Int) -> [URL] {
-        guard let localIP = localWiFiIPv4() else { return [] }
-        let parts = localIP.split(separator: ".")
-        guard parts.count == 4 else { return [] }
-        let prefix = parts.prefix(3).joined(separator: ".")
-        return (1...254).compactMap { host in
-            let ip = "\(prefix).\(host)"
-            guard ip != localIP else { return nil }
-            return URL(string: "http://\(ip):\(port)")
-        }
-    }
-
-    private static func localWiFiIPv4() -> String? {
-        var interfaces: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&interfaces) == 0, let firstInterface = interfaces else { return nil }
-        defer { freeifaddrs(interfaces) }
-
-        for pointer in sequence(first: firstInterface, next: { $0.pointee.ifa_next }) {
-            let interface = pointer.pointee
-            let name = String(cString: interface.ifa_name)
-            let addressFamily = interface.ifa_addr.pointee.sa_family
-            guard name == "en0", addressFamily == UInt8(AF_INET) else { continue }
-
-            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-            let result = getnameinfo(
-                interface.ifa_addr,
-                socklen_t(interface.ifa_addr.pointee.sa_len),
-                &hostname,
-                socklen_t(hostname.count),
-                nil,
-                0,
-                NI_NUMERICHOST
-            )
-            if result == 0 {
-                return String(cString: hostname)
-            }
-        }
-        return nil
     }
 }
 
