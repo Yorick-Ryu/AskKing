@@ -6,57 +6,46 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 
-BASE_URL = os.environ.get("ASKKING_RELAY_URL", "http://localhost:8787").rstrip("/")
-CLIENT_TOKEN = os.environ.get("ASKKING_CLIENT_TOKEN", "")
+def config_paths() -> list[Path]:
+    paths: list[Path] = []
+    explicit = os.environ.get("ASKKING_PLUGIN_CONFIG")
+    if explicit:
+        paths.append(Path(explicit).expanduser())
+    plugin_data = os.environ.get("PLUGIN_DATA")
+    if plugin_data:
+        paths.append(Path(plugin_data).expanduser() / "config.json")
+    paths.append(Path("~/.codex/askking/config.json").expanduser())
+    return paths
+
+
+def load_plugin_config() -> Dict[str, Any]:
+    for path in config_paths():
+        try:
+            with path.open(encoding="utf-8") as handle:
+                payload = json.load(handle)
+            if isinstance(payload, dict):
+                return payload
+        except (OSError, json.JSONDecodeError):
+            continue
+    return {}
+
+
+PLUGIN_CONFIG = load_plugin_config()
+BASE_URL = os.environ.get("ASKKING_RELAY_URL", str(PLUGIN_CONFIG.get("relayUrl") or "http://localhost:8787")).rstrip("/")
+CLIENT_TOKEN = os.environ.get("ASKKING_CLIENT_TOKEN", str(PLUGIN_CONFIG.get("clientToken") or ""))
 APPROVAL_TIMEOUT_SECONDS = int(os.environ.get("ASKKING_APPROVAL_TIMEOUT_SECONDS", "600"))
 STOP_WAIT_SECONDS = int(os.environ.get("ASKKING_STOP_WAIT_SECONDS", "600"))
-STOP_MODE = os.environ.get("ASKKING_STOP_MODE", "wait").strip().lower()
 HOOK_MODE = os.environ.get("ASKKING_HOOK_MODE", "").strip().lower()
-HOOK_MODE_FILE = os.environ.get(
-    "ASKKING_HOOK_MODE_FILE",
-    os.path.expanduser("~/.codex/askking-hook-mode.json"),
-)
 COMPLETION_SUMMARY_LIMIT = int(os.environ.get("ASKKING_COMPLETION_SUMMARY_LIMIT", "4000"))
 CURRENT_COMPLETION_ID: Optional[str] = None
 COMPUTER_HANDOFF_REPLY = "交接给电脑"
 
 
-MODE_ALIASES = {
-    "0": "off",
-    "disable": "off",
-    "disabled": "off",
-    "none": "off",
-    "noop": "off",
-    "off": "off",
-    "无": "off",
-    "无行为": "off",
-    "1": "notify",
-    "notification": "notify",
-    "notification_only": "notify",
-    "notify": "notify",
-    "notify_only": "notify",
-    "仅通知": "notify",
-    "只通知": "notify",
-    "2": "notify",
-    "3": "approval",
-    "approval": "approval",
-    "approval_only": "approval",
-    "approval_notify": "approval",
-    "approval_notify_completion": "approval",
-    "handoff_approval": "approval",
-    "permission": "approval",
-    "permission_only": "approval",
-    "仅交接审批": "approval",
-    "仅交接审批并通知完成": "approval",
-    "4": "full",
-    "all": "full",
-    "full": "full",
-    "wait": "full",
-    "全量": "full",
-}
+MODES = {"off", "notify", "approval", "full"}
 
 
 MODE_BEHAVIOR = {
@@ -121,13 +110,8 @@ def get(path: str, timeout: int = 65) -> Dict[str, Any]:
 
 
 def normalize_mode(value: str) -> str:
-    return MODE_ALIASES.get(value.strip().lower(), "")
-
-
-def legacy_default_mode() -> str:
-    if STOP_MODE in ("notify", "notify_only", "notification_only", "none", "0"):
-        return "approval"
-    return "full"
+    mode = value.strip().lower()
+    return mode if mode in MODES else ""
 
 
 def read_hook_mode() -> str:
@@ -142,16 +126,7 @@ def read_hook_mode() -> str:
                 return relay_mode
         except (urllib.error.URLError, urllib.error.HTTPError, KeyError, json.JSONDecodeError, TimeoutError):
             pass
-    try:
-        with open(os.path.expanduser(HOOK_MODE_FILE), encoding="utf-8") as handle:
-            payload = json.load(handle)
-        if isinstance(payload, dict):
-            file_mode = normalize_mode(str(payload.get("mode", "")))
-            if file_mode:
-                return file_mode
-    except (OSError, json.JSONDecodeError):
-        pass
-    return legacy_default_mode()
+    return "full"
 
 
 def current_behavior() -> Dict[str, bool]:

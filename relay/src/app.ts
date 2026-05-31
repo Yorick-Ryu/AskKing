@@ -35,10 +35,10 @@ function requestTarget(url: string) {
 function hookMode(value: unknown): HookMode | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
-  if (normalized === "0" || normalized === "off" || normalized === "none" || normalized === "disabled") return "off";
-  if (normalized === "1" || normalized === "2" || normalized === "notify" || normalized === "notify_only") return "notify";
-  if (normalized === "3" || normalized === "approval" || normalized === "approval_only" || normalized === "permission") return "approval";
-  if (normalized === "4" || normalized === "full" || normalized === "wait" || normalized === "all") return "full";
+  if (normalized === "off") return "off";
+  if (normalized === "notify") return "notify";
+  if (normalized === "approval") return "approval";
+  if (normalized === "full") return "full";
   return null;
 }
 

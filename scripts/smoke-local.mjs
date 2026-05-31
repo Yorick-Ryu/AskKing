@@ -25,6 +25,7 @@ try {
       ...process.env,
       ASKKING_DB: dbPath,
       ASKKING_ADMIN_TOKEN: adminToken,
+      ASKKING_WRITE_CODEX_CONFIG: "0",
       ASKKING_PORT: String(port)
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -460,6 +461,7 @@ try {
   assert(await stopHookModeChange === "{}", "Stop hook exits wait when mode changes away from full");
   await clearRelayHookMode();
 
+  await setRelayHookMode("notify");
   const stopHookNotifyOnly = await runHook({
     hookEventName: "Stop",
     eventId: "hook-stop-notify-only-smoke",
@@ -469,12 +471,11 @@ try {
     model: "smoke-model",
     summary: "Hook stop notify only."
   }, clientToken, {
-    ASKKING_STOP_MODE: "notify_only",
     ASKKING_STOP_WAIT_SECONDS: "20"
   });
-  assert(stopHookNotifyOnly === "{}", "Stop hook notify-only returns immediately");
+  assert(stopHookNotifyOnly === "{}", "Stop hook notify mode returns immediately");
   const notifyOnlyEvent = await waitForEvent(paired.sessionToken, "completion", "Hook stop notify only.");
-  assert(notifyOnlyEvent.status === "notified", "Stop hook notify-only creates notified completion");
+  assert(notifyOnlyEvent.status === "notified", "Stop hook notify mode creates notified completion");
 
   const userPromptSubmitOutput = await runHook({
     hookEventName: "UserPromptSubmit",
@@ -491,6 +492,7 @@ try {
   });
   assert(locallyContinuedEvent.completion.status === "replied", "UserPromptSubmit marks notify-only completion replied");
   assert(locallyContinuedEvent.completion.reply === "continue after notify-only from Mac", "UserPromptSubmit stores local prompt");
+  await clearRelayHookMode();
 
   const stopHookWithAssistantMessage = runHook({
     hookEventName: "Stop",
@@ -593,7 +595,7 @@ function sleep(ms) {
 
 function runHook(payload, clientToken, extraEnv = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn("python3", ["hooks/askking_codex_hook.py"], {
+    const child = spawn("python3", ["plugins/askking/scripts/askking_codex_hook.py"], {
       cwd: process.cwd(),
       env: {
         ...process.env,

@@ -3,7 +3,7 @@
 AskKing is a Codex iOS approval relay MVP. It provides:
 
 - A local TypeScript/Hono Relay backed by SQLite.
-- A Python Codex hook adapter for `PermissionRequest` and `Stop`.
+- A Codex plugin with hooks and a Python hook adapter for `PermissionRequest`, `Stop`, and `UserPromptSubmit`.
 - A SwiftUI iOS client for pairing, approvals, completion events, and continuation replies.
 - Notification actions for approval allow/deny and completion text replies.
 
@@ -23,33 +23,37 @@ cp .env.example .env
 
 Edit `.env` with your local admin token and optional APNs values. The Relay reads `.env` automatically when running local commands, and shell-provided environment variables still take precedence.
 
-Create a Codex client token:
+Add the AskKing plugin marketplace:
 
 ```sh
-pnpm relay:client
+codex plugin marketplace add Yorick-Ryu/AskKing
+codex
+/plugins
 ```
+
+Install AskKing from the plugin browser. The hooks are bundled with the plugin and load automatically after the plugin is enabled. The local Relay creates the Codex client config automatically when it starts. Restart Codex if requested, then run `/hooks` to review and trust the AskKing hooks. This is required by Codex's hook safety model.
 
 Start the Relay:
 
 ```sh
-pnpm dev
+npx askking@latest
 ```
 
 Create a short-lived iOS pairing code:
 
 ```sh
-pnpm relay:pair
+npx askking@latest pair
 ```
 
 Open `ios/AskKing/AskKing.xcodeproj` in Xcode, set your development team and bundle id, run on an iPhone, then connect:
 
 - Tap automatic discovery to find the local Relay over Bonjour.
 - Or enter the Mac LAN address manually, for example `http://192.168.1.23:8787`.
-- Pairing code: the code printed by `pnpm relay:pair`
+- Pairing code: the code printed by `npx askking@latest pair`
 
 Bonjour discovery publishes `_askking._tcp` from the local Relay. Disable it with `ASKKING_BONJOUR_ENABLED=0`, or rename the advertised service with `ASKKING_BONJOUR_NAME`.
 
-Configure Codex hooks using [examples/codex-hooks.toml](examples/codex-hooks.toml), replacing the token from `pnpm relay:client`.
+The plugin lives at [plugins/askking](plugins/askking). It includes the hook definitions, an AskKing skill, and a hook entrypoint that reads the generated local Relay token from `~/.codex/askking/config.json`.
 
 For the complete startup, pairing, APNs, and hook installation flow, see [docs/end-to-end-setup.md](docs/end-to-end-setup.md).
 

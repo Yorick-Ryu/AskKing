@@ -1,0 +1,20 @@
+{
+  "name": "askking",
+  "interface": {
+    "displayName": "AskKing"
+  },
+  "plugins": [
+    {
+      "name": "askking",
+      "source": {
+        "source": "local",
+        "path": "./plugins/askking"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

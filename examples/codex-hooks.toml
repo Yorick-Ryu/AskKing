@@ -1,8 +1,0 @@
-[hooks.PermissionRequest]
-command = "ASKKING_RELAY_URL=http://localhost:8787 ASKKING_CLIENT_TOKEN=replace_with_client_token /Users/yorick/AIProjects/AskKing/hooks/askking_codex_hook.py"
-
-[hooks.Stop]
-command = "ASKKING_RELAY_URL=http://localhost:8787 ASKKING_CLIENT_TOKEN=replace_with_client_token /Users/yorick/AIProjects/AskKing/hooks/askking_codex_hook.py"
-
-[hooks.UserPromptSubmit]
-command = "ASKKING_RELAY_URL=http://localhost:8787 ASKKING_CLIENT_TOKEN=replace_with_client_token /Users/yorick/AIProjects/AskKing/hooks/askking_codex_hook.py"

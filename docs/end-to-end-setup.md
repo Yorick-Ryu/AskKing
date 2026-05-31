@@ -6,7 +6,7 @@ This guide covers the full local AskKing flow:
 - Start the Relay.
 - Pair the iOS app.
 - Enable APNs notification delivery.
-- Install Codex hooks.
+- Install the AskKing Codex plugin and trust its hooks.
 - Verify approvals, completion notifications, and replies.
 
 ## 1. Install Dependencies
@@ -62,7 +62,7 @@ ASKKING_PUBLIC_BASE_URL=http://<mac-lan-ip>:8787
 Start the Relay:
 
 ```sh
-pnpm dev
+npx askking@latest
 ```
 
 Keep this terminal running.
@@ -88,7 +88,7 @@ The iPhone must be able to open that URL before pairing or notification actions 
 In another terminal, create a pairing code:
 
 ```sh
-pnpm relay:pair
+npx askking@latest pair
 ```
 
 The command prints:
@@ -137,104 +137,60 @@ Xcode project requirements:
 - Entitlements must include `aps-environment = development` for local builds.
 - Run on a real iPhone. Remote APNs delivery cannot be fully tested on a normal simulator flow.
 
-After changing APNs values, restart `pnpm dev`.
+After changing APNs values, restart the Relay.
 
-## 6. Create Codex Client Token
+## 6. Install AskKing Codex Plugin
 
-Create a Codex client token:
-
-```sh
-pnpm relay:client
-```
-
-The command prints:
-
-```text
-Client id: <id>
-Client token: <token>
-```
-
-This token is for the Mac Codex hooks, not for the iPhone.
-
-## 7. Install Codex Hooks
-
-Open the Codex hooks config file:
-
-```text
-/Users/yorick/.codex/hooks.json
-```
-
-Add equivalent hook commands for these events:
-
-- `PermissionRequest`
-- `Stop`
-- `UserPromptSubmit`
-
-Use the client token from `pnpm relay:client`.
-
-Command values should use `localhost` because Codex runs on the same Mac as the Relay:
+Add the AskKing marketplace from GitHub:
 
 ```sh
-ASKKING_RELAY_URL=http://localhost:8787 ASKKING_CLIENT_TOKEN=<client-token> /Users/yorick/AIProjects/AskKing/hooks/askking_codex_hook.py
+codex plugin marketplace add Yorick-Ryu/AskKing
 ```
 
-For the current JSON hook format, add entries like this:
+Open Codex and install AskKing from the plugin browser:
 
-```json
-{
-  "hooks": {
-    "PermissionRequest": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "ASKKING_RELAY_URL=http://localhost:8787 ASKKING_CLIENT_TOKEN=<client-token> /usr/bin/python3 /Users/yorick/AIProjects/AskKing/hooks/askking_codex_hook.py",
-            "timeout": 650,
-            "statusMessage": "等待 AskKing iOS 审批"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "ASKKING_STOP_MODE=wait ASKKING_RELAY_URL=http://localhost:8787 ASKKING_CLIENT_TOKEN=<client-token> /usr/bin/python3 /Users/yorick/AIProjects/AskKing/hooks/askking_codex_hook.py",
-            "timeout": 650,
-            "statusMessage": "发送 AskKing 完成通知"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "ASKKING_RELAY_URL=http://localhost:8787 ASKKING_CLIENT_TOKEN=<client-token> /usr/bin/python3 /Users/yorick/AIProjects/AskKing/hooks/askking_codex_hook.py",
-            "timeout": 20,
-            "statusMessage": "同步 AskKing 本机输入"
-          }
-        ]
-      }
-    ]
-  }
-}
+```text
+/plugins
 ```
 
-If `hooks.json` already contains other hooks, merge the AskKing command objects into the existing event arrays instead of replacing unrelated hooks.
+The hooks are bundled with the plugin and load automatically after the plugin is enabled. The local Relay creates `~/.codex/askking/config.json` automatically when it starts.
 
-The repository also includes [examples/codex-hooks.toml](../examples/codex-hooks.toml) as a TOML-shaped reference for older or alternate hook config formats.
+This token is for the Mac Codex hooks, not for the iPhone. It is intentionally stored outside the plugin hook definition, so rotating the token does not change the hook command that Codex reviews.
+
+## 7. Enable and Trust Plugin Hooks
+
+The AskKing plugin is packaged in this repository:
+
+```text
+plugins/askking
+```
+
+It includes:
+
+- `hooks/hooks.json`: Codex lifecycle hook definitions.
+- `scripts/askking_codex_hook.py`: Codex hook entrypoint that reads `~/.codex/askking/config.json`.
+- `skills/askking/SKILL.md`: AskKing setup and mode-control skill.
+
+The repo-local marketplace entry is:
+
+```text
+.agents/plugins/marketplace.json
+```
+
+Install or enable the AskKing plugin in Codex, restart Codex if requested, then run:
+
+```text
+/hooks
+```
+
+Review and trust the AskKing hooks loaded from the plugin. Codex requires this review for command hooks, including hooks supplied by plugins.
 
 Optional hook environment variables:
 
 ```sh
 ASKKING_APPROVAL_TIMEOUT_SECONDS=600
 ASKKING_STOP_WAIT_SECONDS=600
-ASKKING_STOP_MODE=wait
 ASKKING_HOOK_MODE=full
-ASKKING_HOOK_MODE_FILE=~/.codex/askking-hook-mode.json
 ASKKING_COMPLETION_SUMMARY_LIMIT=4000
 ```
 
@@ -248,20 +204,16 @@ ASKKING_COMPLETION_SUMMARY_LIMIT=4000
 You can change the mode while Codex is running:
 
 ```sh
-pnpm hooks:mode off
-pnpm hooks:mode notify
-pnpm hooks:mode approval
-pnpm hooks:mode full
-pnpm hooks:mode
+npx askking@latest mode off
+npx askking@latest mode notify
+npx askking@latest mode approval
+npx askking@latest mode full
+npx askking@latest mode
 ```
 
-The command writes `~/.codex/askking-hook-mode.json` by default. Hooks read that file every time they run, and long approval/completion waits re-read it while waiting, so changing from `full` to `notify` or `off` releases the current wait.
+The command writes the mode to the Relay database. Hooks ask the Relay for the current mode every time they run, and long approval/completion waits re-read it while waiting, so changing from `full` to `notify` or `off` releases the current wait.
 
-`ASKKING_HOOK_MODE` overrides the mode file when set. If neither is set, legacy behavior is preserved: approval is handed off to iPhone, and `ASKKING_STOP_MODE` controls whether Stop waits.
-
-`ASKKING_STOP_MODE=wait` blocks the Stop hook until the iPhone replies or times out when no global hook mode is configured. A text reply continues Codex with that prompt.
-
-`ASKKING_STOP_MODE=notify_only` sends completion notifications but lets Codex finish immediately when no global hook mode is configured. In that mode, `UserPromptSubmit` can still sync the next Mac-local prompt back to the latest completion event.
+`ASKKING_HOOK_MODE` overrides the Relay mode when set. If neither is set, AskKing defaults to `full`.
 
 ## 8. Verify Flow
 
@@ -279,7 +231,7 @@ Completion flow:
 2. Stop hook creates a completion event.
 3. iPhone receives it through polling and, if APNs is enabled, a notification.
 4. Reply with the next instruction in the app or notification.
-5. If `ASKKING_STOP_MODE=wait`, the hook returns that reply to Codex as a continuation prompt.
+5. In `full` mode, the hook returns that reply to Codex as a continuation prompt.
 
 Manual approval smoke test:
 
@@ -307,7 +259,7 @@ curl -H "authorization: Bearer $CLIENT_TOKEN" \
 
 ```sh
 cd /Users/yorick/AIProjects/AskKing
-pnpm dev
+npx askking@latest
 ```
 
 2. Confirm iPhone can open:
@@ -335,8 +287,8 @@ If iPhone cannot pair:
 If hooks do not trigger iPhone events:
 
 - Confirm Relay is running.
-- Confirm hook command uses `ASKKING_RELAY_URL=http://localhost:8787`.
-- Confirm `ASKKING_CLIENT_TOKEN` is from `pnpm relay:client`.
+- Confirm `~/.codex/askking/config.json` exists and contains `relayUrl` plus `clientToken`.
+- Run `/hooks` in Codex and confirm the AskKing plugin hooks are trusted.
 - Do not use the iPhone pairing code as the hook client token.
 
 If APNs notifications do not arrive:
