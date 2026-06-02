@@ -220,6 +220,14 @@ def summarize_completion(payload: Dict[str, Any]) -> str:
     return summary if len(summary) <= COMPLETION_SUMMARY_LIMIT else summary[:COMPLETION_SUMMARY_LIMIT - 3] + "..."
 
 
+def is_suggestions_summary(summary: str) -> bool:
+    try:
+        value = json.loads(summary)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(value, dict) and isinstance(value.get("suggestions"), list)
+
+
 def project_name(payload: Dict[str, Any]) -> str:
     explicit = first_string(payload, "projectName", "project_name")
     if explicit:
@@ -319,6 +327,10 @@ def handle_stop(payload: Dict[str, Any]) -> None:
         stop_ok()
         return
     try:
+        summary = summarize_completion(payload)
+        if is_suggestions_summary(summary):
+            stop_ok()
+            return
         wait_for_reply = behavior["handoff_completion"]
         created = post("/api/codex/completions", {
             "eventId": first_string(payload, "eventId", "event_id", "turnId", "turn_id", default=str(time.time())),
@@ -326,7 +338,7 @@ def handle_stop(payload: Dict[str, Any]) -> None:
             "cwd": first_string(payload, "cwd", "workingDirectory", "working_directory", default=os.getcwd()),
             "model": first_string(payload, "model", default=os.environ.get("ASKKING_MODEL", "")),
             "sessionKey": session_key(payload),
-            "summary": summarize_completion(payload),
+            "summary": summary,
             "waitForReply": wait_for_reply,
             "ttlSeconds": STOP_WAIT_SECONDS,
         })
