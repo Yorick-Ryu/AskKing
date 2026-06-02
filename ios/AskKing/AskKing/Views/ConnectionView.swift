@@ -66,7 +66,7 @@ struct ConnectionView: View {
 
                 if appState.isPaired && isRelayUnavailable {
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("设备仍然已配对，但当前无法连接到 AskKing Relay。", systemImage: "wifi.slash")
+                        Label("设备已配对，但无法连接到 AskKing Relay。", systemImage: "wifi.slash")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
 
@@ -94,10 +94,19 @@ struct ConnectionView: View {
                     }
 
                     Button {
-                        Task { await appState.testConnection() }
+                        Task { await appState.discoverRelay() }
                     } label: {
-                        Label("重新连接", systemImage: "arrow.clockwise")
+                        if appState.isDiscoveringRelay {
+                            Label {
+                                Text("重新连接")
+                            } icon: {
+                                ProgressView()
+                            }
+                        } else {
+                            Label("重新连接", systemImage: "arrow.clockwise")
+                        }
                     }
+                    .disabled(appState.isDiscoveringRelay)
                 } else if appState.isPaired {
                     Button(role: .destructive) {
                         isConfirmingLogout = true
