@@ -44,7 +44,7 @@ function hookMode(value: unknown): HookMode | null {
 
 async function hookModeResponse(store: RelayStore) {
   const mode = await store.getHookMode();
-  return { mode: mode ?? "full", configured: mode !== null };
+  return { mode: mode ?? "notify", configured: mode !== null };
 }
 
 export function createApp(config: RelayConfig, store: RelayStore) {

@@ -206,7 +206,7 @@ npx askking@latest mode
 
 The command writes the mode to the Relay database. Hooks ask the Relay for the current mode every time they run, and long approval/completion waits re-read it while waiting, so changing from `full` to `notify` or `off` releases the current wait.
 
-`ASKKING_HOOK_MODE` overrides the Relay mode when set. If neither is set, AskKing defaults to `full`.
+`ASKKING_HOOK_MODE` overrides the Relay mode when set. If neither is set, AskKing defaults to `notify`.
 
 ## 7. Verify Flow
 

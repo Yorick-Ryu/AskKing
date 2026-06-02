@@ -35,7 +35,7 @@ if (!command || command === "dev" || command === "start") {
   if (requestedMode) {
     if (requestedMode === "clear" || requestedMode === "default") {
       store.clearHookMode();
-      console.log(`Hook mode: ${store.getHookMode() ?? "full"} (default)`);
+      console.log(`Hook mode: ${store.getHookMode() ?? "notify"} (default)`);
       process.exit(0);
     }
     const mode = normalizeHookMode(requestedMode);
@@ -45,7 +45,7 @@ if (!command || command === "dev" || command === "start") {
     }
     store.setHookMode(mode);
   }
-  console.log(`Hook mode: ${store.getHookMode() ?? "full"}`);
+  console.log(`Hook mode: ${store.getHookMode() ?? "notify"}`);
 } else {
   console.error("Usage: askking [dev|start|pair|client [name] [defaultProjectName]|mode [off|notify|approval|full|clear]]");
   process.exit(2);

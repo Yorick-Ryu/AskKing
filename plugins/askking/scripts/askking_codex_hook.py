@@ -126,7 +126,7 @@ def read_hook_mode() -> str:
                 return relay_mode
         except (urllib.error.URLError, urllib.error.HTTPError, KeyError, json.JSONDecodeError, TimeoutError):
             pass
-    return "full"
+    return "notify"
 
 
 def current_behavior() -> Dict[str, bool]:

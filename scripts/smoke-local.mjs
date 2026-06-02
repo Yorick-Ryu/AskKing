@@ -67,7 +67,7 @@ try {
   const defaultHookMode = await requestJson(`${baseUrl}/api/mobile/hook-mode`, {
     headers: authHeaders(paired.sessionToken)
   });
-  assert(defaultHookMode.mode === "full", "hook mode defaults to full");
+  assert(defaultHookMode.mode === "notify", "hook mode defaults to notify");
   assert(defaultHookMode.configured === false, "default hook mode is not explicitly configured");
 
   const mobileHookMode = await requestJson(`${baseUrl}/api/mobile/hook-mode`, {
@@ -87,7 +87,7 @@ try {
     method: "DELETE",
     headers: authHeaders(clientToken)
   });
-  assert(clearedHookMode.mode === "full", "Codex can clear hook mode to default");
+  assert(clearedHookMode.mode === "notify", "Codex can clear hook mode to default");
   assert(clearedHookMode.configured === false, "cleared hook mode is not explicitly configured");
 
   const decided = await requestJson(`${baseUrl}/api/mobile/approvals/${approval.approval.id}/decision`, {
@@ -266,6 +266,7 @@ try {
   });
   assert(interruptedCompletion.completion.status === "interrupted", "Codex can mark a waiting completion interrupted");
 
+  await setRelayHookMode("full");
   const permissionHook = runHook({
     hook_event_name: "PermissionRequest",
     eventId: "hook-permission-smoke",
