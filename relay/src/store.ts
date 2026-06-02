@@ -165,13 +165,25 @@ export class Store implements RelayStore {
   }
 
   setDeviceApnsToken(deviceId: string, token: string) {
-    this.db.prepare("update devices set apns_token = ?, last_seen_at = ? where id = ?").run(token, new Date().toISOString(), deviceId);
+    const now = new Date().toISOString();
+    this.db.transaction(() => {
+      this.db.prepare("update devices set apns_token = null, last_seen_at = ? where apns_token = ? and id <> ?").run(now, token, deviceId);
+      this.db.prepare("update devices set apns_token = ?, last_seen_at = ? where id = ?").run(token, now, deviceId);
+    })();
   }
 
   listPushDevices(): Device[] {
     return this.db.prepare(`
-      select id, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, enabled, created_at as createdAt, last_seen_at as lastSeenAt
-      from devices where enabled = 1 and apns_token is not null
+      select id, name, apnsToken, sessionTokenHash, enabled, createdAt, lastSeenAt
+      from (
+        select id, name, apns_token as apnsToken, session_token_hash as sessionTokenHash,
+          enabled, created_at as createdAt, last_seen_at as lastSeenAt,
+          row_number() over (partition by apns_token order by last_seen_at desc, created_at desc) as tokenRank
+        from devices
+        where enabled = 1 and apns_token is not null
+      )
+      where tokenRank = 1
+      order by lastSeenAt desc
     `).all() as Device[];
   }
 
