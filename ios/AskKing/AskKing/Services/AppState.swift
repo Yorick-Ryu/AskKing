@@ -14,13 +14,11 @@ final class AppState: ObservableObject {
     @Published var isTestingConnection = false
     @Published var notice: String?
     @Published var selectedRoute: EventRoute?
-    @Published var selectedTab: AppTab = .messages
+    @Published var selectedTab: AppTab = .connection
     @Published var notificationStatus: UNAuthorizationStatus = .notDetermined
     @Published var appearance: AppearanceMode {
         didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
     }
-
-    private var pollingTask: Task<Void, Never>?
 
     init() {
         relayURLString = UserDefaults.standard.string(forKey: "relayURL") ?? Self.defaultRelayURLString
@@ -74,8 +72,6 @@ final class AppState: ObservableObject {
             KeychainStore.set(response.deviceId, for: "deviceId")
             isPaired = true
             await requestNotifications()
-            await refreshEvents()
-            startPolling()
         } catch {
             guard !isCancellationError(error) else { return }
             notice = error.localizedDescription
@@ -150,9 +146,7 @@ final class AppState: ObservableObject {
     }
 
     func openNotification(kind: String, id: String) {
-        selectedTab = .messages
-        selectedRoute = EventRoute(kind: kind, id: id)
-        Task { await refreshEvents() }
+        selectedTab = .connection
     }
 
     func testConnection() async {
@@ -175,31 +169,13 @@ final class AppState: ObservableObject {
 
     func refreshEvents(showsError: Bool) async {
         guard isPaired else { return }
-        do {
-            events = try await api.events()
-            connectionStatus = "在线"
-        } catch {
-            guard !isCancellationError(error) else { return }
-            connectionStatus = "离线"
-            if showsError {
-                notice = error.localizedDescription
-            }
-        }
+        connectionStatus = "在线"
     }
 
     func startPolling() {
-        guard isPaired, pollingTask == nil else { return }
-        pollingTask = Task { [weak self] in
-            while !Task.isCancelled {
-                await self?.refreshEvents(showsError: false)
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-            }
-        }
     }
 
     func stopPolling() {
-        pollingTask?.cancel()
-        pollingTask = nil
     }
 
     func logout() async {

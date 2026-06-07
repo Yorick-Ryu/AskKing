@@ -23,12 +23,6 @@ struct RootView: View {
     private var pairedTabs: some View {
         TabView(selection: $appState.selectedTab) {
             NavigationStack {
-                MessagesView()
-            }
-            .tabItem { Label("消息", systemImage: "message.badge") }
-            .tag(AppTab.messages)
-
-            NavigationStack {
                 ConnectionView()
             }
             .tabItem { Label("连接", systemImage: "network") }
@@ -41,8 +35,7 @@ struct RootView: View {
             .tag(AppTab.settings)
         }
         .task {
-            await appState.refreshEvents()
-            appState.startPolling()
+            await appState.updateNotificationStatus()
         }
     }
 }

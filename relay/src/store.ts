@@ -1,7 +1,20 @@
 import Database from "better-sqlite3";
 import { randomCode, randomToken, sha256 } from "./crypto.js";
 import type { ApprovalRequest, CompletionEvent, CodexClient, Device, HookMode } from "./types.js";
-import type { EventListItem, PairingCodeInput, RelayStore } from "./store.types.js";
+import type { PairingCodeInput, RelayStore } from "./store.types.js";
+
+type EventListItem = {
+  kind: "completion";
+  id: string;
+  projectName: string;
+  model: string;
+  status: string;
+  summary: string;
+  createdAt: string;
+  expiresAt: string;
+  reply?: string | null;
+  notifyOnly?: boolean;
+};
 
 export class Store implements RelayStore {
   private db: Database.Database;
@@ -39,53 +52,7 @@ export class Store implements RelayStore {
         expires_at text not null,
         used_at text
       );
-      create table if not exists approvals (
-        id text primary key,
-        client_id text not null,
-        event_id text not null,
-        project_name text not null,
-        cwd text not null,
-        model text not null,
-        command_summary text not null,
-        command_full text not null,
-        reason text not null,
-        risk_summary text not null,
-        status text not null,
-        notify_only integer not null default 0,
-        decision_source text,
-        created_at text not null,
-        expires_at text not null,
-        decided_at text
-      );
-      create table if not exists completions (
-        id text primary key,
-        client_id text not null,
-        event_id text not null,
-        project_name text not null,
-        cwd text not null,
-        model text not null,
-        session_key text not null default '',
-        summary text not null,
-        status text not null,
-        notify_only integer not null default 0,
-        created_at text not null,
-        expires_at text not null,
-        reply text,
-        replied_at text
-      );
-      create table if not exists settings (
-        key text primary key,
-        value text not null,
-        updated_at text not null
-      );
     `);
-    const completionColumns = this.db.prepare("pragma table_info(completions)").all() as { name: string }[];
-    if (!completionColumns.some((column) => column.name === "session_key")) {
-      this.db.prepare("alter table completions add column session_key text not null default ''").run();
-    }
-    if (!completionColumns.some((column) => column.name === "notify_only")) {
-      this.db.prepare("alter table completions add column notify_only integer not null default 0").run();
-    }
     const deviceColumns = this.db.prepare("pragma table_info(devices)").all() as { name: string }[];
     if (!deviceColumns.some((column) => column.name === "client_id")) {
       this.db.prepare("alter table devices add column client_id text not null default ''").run();
@@ -93,10 +60,6 @@ export class Store implements RelayStore {
     const pairingColumns = this.db.prepare("pragma table_info(pairing_codes)").all() as { name: string }[];
     if (!pairingColumns.some((column) => column.name === "client_id")) {
       this.db.prepare("alter table pairing_codes add column client_id text not null default ''").run();
-    }
-    const approvalColumns = this.db.prepare("pragma table_info(approvals)").all() as { name: string }[];
-    if (!approvalColumns.some((column) => column.name === "notify_only")) {
-      this.db.prepare("alter table approvals add column notify_only integer not null default 0").run();
     }
   }
 

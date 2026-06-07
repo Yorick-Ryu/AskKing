@@ -11,10 +11,6 @@ function text(value: unknown, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
-function expiresIn(seconds: number) {
-  return new Date(Date.now() + seconds * 1000).toISOString();
-}
-
 function idParam(c: { req: { param: (name: string) => string | undefined } }) {
   const id = c.req.param("id");
   if (!id) throw new Error("missing route id");
@@ -119,21 +115,11 @@ export function createApp(config: RelayConfig, store: RelayStore) {
     return c.json({ ok: true });
   });
 
-  app.get("/api/mobile/events", requireDevice(store), async (c) => {
-    const limit = Number(c.req.query("limit") ?? "50");
-    return c.json({ events: await store.listEvents(c.get("clientId")!, Math.min(Math.max(limit, 1), 100)) });
-  });
-
-  app.get("/api/mobile/completions/:id", requireDevice(store), async (c) => {
-    const completion = await store.getCompletion(idParam(c), c.get("clientId")!);
-    if (!completion) return c.json({ error: "not_found" }, 404);
-    return c.json({ completion });
-  });
-
   app.post("/api/codex/completions", requireClient(store), async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const pushDevices = await store.listPushDevices(c.get("clientId")!);
-    const completionInput: Omit<CompletionEvent, "id" | "createdAt" | "reply" | "repliedAt"> = {
+    const completion: CompletionEvent = {
+      id: crypto.randomUUID(),
       clientId: c.get("clientId")!,
       eventId: text(body.eventId, crypto.randomUUID()),
       projectName: text(body.projectName, "Codex"),
@@ -142,13 +128,15 @@ export function createApp(config: RelayConfig, store: RelayStore) {
       sessionKey: text(body.sessionKey),
       summary: redact(text(body.summary, "Codex turn completed.")),
       status: "notified",
-      expiresAt: expiresIn(Number(body.ttlSeconds ?? 45)),
-      notifyOnly: true
+      expiresAt: "",
+      notifyOnly: true,
+      createdAt: new Date().toISOString(),
+      reply: null,
+      repliedAt: null
     };
-    const completion = await store.createCompletion(completionInput);
     runAfterResponse(c, Promise.resolve(apns.sendCompletion(pushDevices, completion))
       .catch((error) => console.error("[apns] completion failed", error)));
-    return c.json({ completion });
+    return c.json({ ok: true, id: completion.id });
   });
 
   return app;
