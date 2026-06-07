@@ -4,9 +4,6 @@ struct CompletionDetailView: View {
     @EnvironmentObject private var appState: AppState
     let id: String
     @State private var completion: Completion?
-    @State private var reply = ""
-    @State private var isWorking = false
-    @FocusState private var isReplyFocused: Bool
 
     var body: some View {
         Form {
@@ -34,51 +31,12 @@ struct CompletionDetailView: View {
                     }
                     FieldRow("创建时间", formattedLocalTime(completion.createdAt))
                 }
-
-                Button {
-                    isReplyFocused = false
-                    Task { await sendHandoffToComputer() }
-                } label: {
-                    Label(handoffButtonTitle(for: completion), systemImage: "desktopcomputer")
-                        .font(.headline)
-                        .foregroundStyle(canHandoff(completion) ? Color.white : Color.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-                .disabled(!canHandoff(completion))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 10, trailing: 4))
             } else {
                 ProgressView()
             }
         }
-        .contentShape(Rectangle())
-        .simultaneousGesture(
-            TapGesture().onEnded {
-                isReplyFocused = false
-            }
-        )
-        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("完成详情")
         .toolbar(.hidden, for: .tabBar)
-        .safeAreaInset(edge: .bottom) {
-            if let completion {
-                ReplyInputBar(
-                    reply: $reply,
-                    placeholder: replyPlaceholder(for: completion),
-                    isFocused: $isReplyFocused,
-                    isEnabled: completion.status == "waiting" && !completion.isNotifyOnly,
-                    canSend: canSendReply(completion),
-                    send: {
-                        isReplyFocused = false
-                        Task { await sendReply() }
-                    }
-                )
-            }
-        }
         .task { await refreshLoop() }
     }
 
@@ -100,58 +58,6 @@ struct CompletionDetailView: View {
             }
         }
     }
-
-    private func sendReply() async {
-        isWorking = true
-        defer { isWorking = false }
-        do {
-            let sentReply = reply.trimmingCharacters(in: .whitespacesAndNewlines)
-            completion = try await appState.api.replyCompletion(id: id, reply: sentReply)
-            reply = ""
-            await appState.refreshEvents()
-        } catch {
-            guard !isCancellationError(error) else { return }
-            appState.notice = error.localizedDescription
-        }
-    }
-
-    private func sendHandoffToComputer() async {
-        isWorking = true
-        defer { isWorking = false }
-        do {
-            completion = try await appState.api.replyCompletion(id: id, reply: computerHandoffReply)
-            reply = ""
-            await appState.refreshEvents()
-        } catch {
-            guard !isCancellationError(error) else { return }
-            appState.notice = error.localizedDescription
-        }
-    }
-
-    private func canSendReply(_ completion: Completion) -> Bool {
-        !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && completion.status == "waiting" && !completion.isNotifyOnly && !isWorking
-    }
-
-    private func canHandoff(_ completion: Completion) -> Bool {
-        completion.status == "waiting" && !completion.isNotifyOnly && !isWorking
-    }
-
-    private func handoffButtonTitle(for completion: Completion) -> String {
-        if completion.reply == computerHandoffReply {
-            return "已交接给电脑"
-        }
-        return computerHandoffReply
-    }
-
-    private func replyPlaceholder(for completion: Completion) -> String {
-        if completion.isNotifyOnly {
-            return "仅通知"
-        }
-        if completion.status == "replied" || !(completion.reply ?? "").isEmpty {
-            return "已回复"
-        }
-        return completion.status == "waiting" ? "下一步指令" : "不可回复"
-    }
 }
 
 private struct SummaryScrollView: View {
@@ -167,64 +73,24 @@ private struct SummaryScrollView: View {
     }
 }
 
-private struct ReplyInputBar: View {
-    @Binding var reply: String
-    let placeholder: String
-    let isFocused: FocusState<Bool>.Binding
-    let isEnabled: Bool
-    let canSend: Bool
-    let send: () -> Void
+struct FieldRow: View {
+    let title: String
+    let value: String
+
+    init(_ title: String, _ value: String) {
+        self.title = title
+        self.value = value
+    }
 
     var body: some View {
-        HStack(spacing: 8) {
-            TextField(placeholder, text: $reply)
-                .textInputAutocapitalization(.never)
-                .submitLabel(.send)
-                .focused(isFocused)
-                .disabled(!isEnabled)
-                .onSubmit {
-                    guard canSend else { return }
-                    send()
-                }
-
-            Button(action: send) {
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(canSend ? .primary : .secondary)
-                    .frame(width: 36, height: 36)
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSend)
+        HStack(alignment: .top) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value.isEmpty ? "-" : value)
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
         }
-        .padding(.leading, 18)
-        .padding(.trailing, 12)
-        .padding(.vertical, 11)
-        .modifier(LiquidGlassInputStyle(isEnabled: isEnabled))
-        .padding(.horizontal, 18)
-        .padding(.bottom, 8)
-    }
-}
-
-private struct LiquidGlassInputStyle: ViewModifier {
-    let isEnabled: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .background(alignment: .center) {
-                if #available(iOS 26.0, *) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.20))
-                        .glassEffect(.regular.interactive(isEnabled), in: Capsule())
-                } else {
-                    Capsule()
-                        .fill(.regularMaterial)
-                        .overlay {
-                            Capsule()
-                                .fill(Color.white.opacity(0.22))
-                        }
-                }
-            }
-            .shadow(color: .black.opacity(0.08), radius: 18, y: 8)
     }
 }
 

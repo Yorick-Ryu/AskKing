@@ -6,6 +6,8 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Codex Done</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -44,8 +46,8 @@
 		<string>_askking._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>AskKing 需要使用相机扫描终端中的配对二维码。</string>
+	<string>Codex Done 需要使用相机扫描终端中的配对二维码。</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>AskKing 使用远端 Relay 接收审批和完成通知。</string>
+	<string>Codex Done 使用远端 Relay 接收完成通知。</string>
 </dict>
 </plist>

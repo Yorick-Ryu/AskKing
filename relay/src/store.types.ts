@@ -3,7 +3,7 @@ import type { ApprovalRequest, CompletionEvent, CodexClient, Device, HookMode } 
 export type MaybePromise<T> = T | Promise<T>;
 
 export type EventListItem = {
-  kind: "approval" | "completion";
+  kind: "completion";
   id: string;
   projectName: string;
   model: string;

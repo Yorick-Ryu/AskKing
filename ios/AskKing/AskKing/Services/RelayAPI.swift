@@ -26,23 +26,8 @@ struct RelayAPI {
         return response.events
     }
 
-    func approval(id: String) async throws -> Approval {
-        let response: ApprovalResponse = try await request("api/mobile/approvals/\(id)", method: "GET", body: Optional<String>.none, authenticated: true)
-        return response.approval
-    }
-
-    func decideApproval(id: String, decision: String) async throws -> Approval {
-        let response: ApprovalResponse = try await request("api/mobile/approvals/\(id)/decision", method: "POST", body: ["decision": decision], authenticated: true)
-        return response.approval
-    }
-
     func completion(id: String) async throws -> Completion {
         let response: CompletionResponse = try await request("api/mobile/completions/\(id)", method: "GET", body: Optional<String>.none, authenticated: true)
-        return response.completion
-    }
-
-    func replyCompletion(id: String, reply: String) async throws -> Completion {
-        let response: CompletionResponse = try await request("api/mobile/completions/\(id)/reply", method: "POST", body: ["reply": reply], authenticated: true)
         return response.completion
     }
 
@@ -68,6 +53,5 @@ struct RelayAPI {
 }
 
 struct EventsResponse: Codable { let events: [EventItem] }
-struct ApprovalResponse: Codable { let approval: Approval }
 struct CompletionResponse: Codable { let completion: Completion }
 struct EmptyResponse: Codable {}

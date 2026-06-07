@@ -22,14 +22,10 @@
     "build": "pnpm clean && tsc",
     "prepack": "pnpm build",
     "dev": "tsx relay/src/cli.ts dev",
-    "smoke:local": "node scripts/smoke-local.mjs",
-    "smoke:remote": "node scripts/smoke-remote.mjs",
-    "smoke:package": "node scripts/smoke-package.mjs",
     "typecheck": "tsc --noEmit",
     "cf:deploy": "wrangler deploy",
     "relay:pair": "tsx relay/src/cli.ts pair",
-    "relay:client": "tsx relay/src/cli.ts client",
-    "relay:mode": "tsx relay/src/cli.ts mode"
+    "relay:client": "tsx relay/src/cli.ts client"
   },
   "dependencies": {
     "hono": "^4.7.11"

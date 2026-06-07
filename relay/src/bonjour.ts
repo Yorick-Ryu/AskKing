@@ -20,14 +20,14 @@ export async function publishBonjourRelay(config: RelayConfig): Promise<BonjourP
       type: serviceType,
       port: config.port,
       txt: {
-        app: "AskKing",
+        app: "Codex Done",
         protocol: "http",
         version: "1",
         healthPath: "/health"
       }
     });
     await service.advertise();
-    console.log(`AskKing Relay Bonjour: ${config.bonjourName}._${serviceType}._tcp.local:${config.port}`);
+    console.log(`Codex Done Relay Bonjour: ${config.bonjourName}._${serviceType}._tcp.local:${config.port}`);
 
     return {
       shutdown: async () => {

@@ -318,16 +318,12 @@ export class D1Store implements RelayStore {
 
   async listEvents(clientId: string, limit = 50): Promise<EventListItem[]> {
     const result = await this.db.prepare(`
-      select 'approval' as kind, id, project_name as projectName, model, status, command_summary as summary, created_at as createdAt, expires_at as expiresAt, null as reply, notify_only as notifyOnly
-      from approvals
-      where client_id = ?
-      union all
       select 'completion' as kind, id, project_name as projectName, model, status, summary, created_at as createdAt, expires_at as expiresAt, reply, notify_only as notifyOnly
       from completions
       where client_id = ?
       order by createdAt desc
       limit ?
-    `).bind(clientId, clientId, limit).all<EventListItem>();
+    `).bind(clientId, limit).all<EventListItem>();
     return (result.results ?? []).map((row) => ({ ...row, notifyOnly: Boolean(row.notifyOnly) }));
   }
 }

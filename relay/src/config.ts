@@ -63,7 +63,7 @@ export function loadConfig(): RelayConfig {
     databasePath: process.env.ASKKING_DB ?? "./askking.sqlite",
     publicBaseUrl: process.env.ASKKING_PUBLIC_BASE_URL ?? defaultPublicBaseUrl,
     bonjourEnabled: process.env.ASKKING_BONJOUR_ENABLED !== "0",
-    bonjourName: process.env.ASKKING_BONJOUR_NAME ?? "AskKing Relay",
+    bonjourName: process.env.ASKKING_BONJOUR_NAME ?? "Codex Done Relay",
     adminToken: process.env.ASKKING_ADMIN_TOKEN ?? "dev-admin-token",
     defaultClientName: process.env.ASKKING_CLIENT_NAME ?? "Local Codex",
     apns: {

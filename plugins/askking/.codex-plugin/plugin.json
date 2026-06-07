@@ -1,9 +1,9 @@
 {
   "name": "askking",
   "version": "0.1.0",
-  "description": "AskKing connects Codex approval and completion hooks to the AskKing Relay and iOS app.",
+  "description": "Codex Done sends Codex completion notifications to iOS.",
   "author": {
-    "name": "AskKing"
+    "name": "Codex Done"
   },
   "homepage": "https://github.com/Yorick-Ryu/AskKing",
   "repository": "https://github.com/Yorick-Ryu/AskKing",
@@ -11,25 +11,24 @@
   "keywords": [
     "codex",
     "hooks",
-    "approval",
+    "completion",
     "ios",
     "relay"
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "AskKing",
-    "shortDescription": "Send Codex approvals and completions to iOS.",
-    "longDescription": "AskKing installs Codex lifecycle hooks that forward approval requests, completion notifications, and continuation replies to a configured AskKing Relay for review from the iOS app.",
-    "developerName": "AskKing",
+    "displayName": "Codex Done",
+    "shortDescription": "Send Codex completion notifications to iOS.",
+    "longDescription": "Codex Done installs a Codex Stop hook that forwards completion notifications to a configured relay and iOS app.",
+    "developerName": "Codex Done",
     "category": "Productivity",
     "capabilities": [
       "Read",
       "Write"
     ],
     "defaultPrompt": [
-      "Set AskKing to full mode",
-      "Install AskKing hooks",
-      "Generate an AskKing pairing code"
+      "Install Codex Done hooks",
+      "Generate a Codex Done pairing code"
     ],
     "brandColor": "#0F766E",
     "screenshots": []

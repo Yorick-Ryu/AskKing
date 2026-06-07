@@ -1,37 +1,13 @@
 {
   "hooks": {
-    "PermissionRequest": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/usr/bin/python3 \"${PLUGIN_ROOT}/scripts/askking_codex_hook.py\"",
-            "timeout": 650,
-            "statusMessage": "等待 AskKing iOS 审批"
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "/usr/bin/python3 \"${PLUGIN_ROOT}/scripts/askking_codex_hook.py\"",
-            "timeout": 650,
-            "statusMessage": "发送 AskKing 完成通知"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/usr/bin/python3 \"${PLUGIN_ROOT}/scripts/askking_codex_hook.py\"",
             "timeout": 20,
-            "statusMessage": "同步 AskKing 本机输入"
+            "statusMessage": "发送 Codex Done 完成通知"
           }
         ]
       }

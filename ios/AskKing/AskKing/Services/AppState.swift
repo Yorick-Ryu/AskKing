@@ -84,7 +84,7 @@ final class AppState: ObservableObject {
 
     func pair(scannedValue: String) async {
         guard let payload = AskKingPairingPayload(rawValue: scannedValue) else {
-            notice = "二维码不是 AskKing 配对信息"
+            notice = "二维码不是 Codex Done 配对信息"
             return
         }
         relayURLString = payload.relayURLString
@@ -200,38 +200,6 @@ final class AppState: ObservableObject {
     func stopPolling() {
         pollingTask?.cancel()
         pollingTask = nil
-    }
-
-    func decideApproval(id: String, decision: String) async {
-        do {
-            _ = try await api.decideApproval(id: id, decision: decision)
-            await refreshEvents()
-        } catch {
-            guard !isCancellationError(error) else { return }
-            notice = error.localizedDescription
-        }
-    }
-
-    func replyCompletion(id: String, reply: String) async {
-        let trimmed = reply.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        do {
-            _ = try await api.replyCompletion(id: id, reply: trimmed)
-            await refreshEvents()
-        } catch {
-            guard !isCancellationError(error) else { return }
-            notice = error.localizedDescription
-        }
-    }
-
-    func handoffCompletionToComputer(id: String) async {
-        do {
-            _ = try await api.replyCompletion(id: id, reply: computerHandoffReply)
-            await refreshEvents()
-        } catch {
-            guard !isCancellationError(error) else { return }
-            notice = error.localizedDescription
-        }
     }
 
     func logout() async {

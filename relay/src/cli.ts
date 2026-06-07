@@ -4,15 +4,6 @@ import { dirname, join } from "node:path";
 
 const command = process.argv[2];
 
-function normalizeHookMode(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "off") return "off";
-  if (normalized === "notify") return "notify";
-  if (normalized === "approval") return "approval";
-  if (normalized === "full") return "full";
-  return null;
-}
-
 function askKingCodexConfigPath() {
   const home = process.env.HOME;
   return home ? join(home, ".codex", "askking", "config.json") : null;
@@ -38,7 +29,7 @@ function configuredRelay() {
 
 function writeCodexConfig(relayUrl: string, clientToken: string) {
   const path = askKingCodexConfigPath();
-  if (!path) throw new Error("HOME is required to write AskKing config");
+  if (!path) throw new Error("HOME is required to write Codex Done config");
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify({ relayUrl: relayUrl.replace(/\/+$/, ""), clientToken }, null, 2) + "\n");
   return path;
@@ -57,29 +48,6 @@ async function requestJson(url: string, token: string, init: RequestInit = {}) {
   const payload = body ? JSON.parse(body) : {};
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${body}`);
   return payload as Record<string, unknown>;
-}
-
-async function remoteMode(relayUrl: string, clientToken: string, requestedMode?: string) {
-  if (requestedMode) {
-    if (requestedMode === "clear" || requestedMode === "default") {
-      const payload = await requestJson(`${relayUrl}/api/codex/hook-mode`, clientToken, { method: "DELETE" });
-      console.log(`Hook mode: ${payload.mode ?? "notify"} (default)`);
-      return;
-    }
-    const mode = normalizeHookMode(requestedMode);
-    if (!mode) {
-      console.error("Mode must be one of: off, notify, approval, full");
-      process.exit(2);
-    }
-    const payload = await requestJson(`${relayUrl}/api/codex/hook-mode`, clientToken, {
-      method: "POST",
-      body: JSON.stringify({ mode })
-    });
-    console.log(`Hook mode: ${payload.mode ?? mode}`);
-    return;
-  }
-  const payload = await requestJson(`${relayUrl}/api/codex/hook-mode`, clientToken);
-  console.log(`Hook mode: ${payload.mode ?? "notify"}${payload.configured === false ? " (default)" : ""}`);
 }
 
 async function localStore() {
@@ -121,7 +89,7 @@ async function main() {
       process.exit(2);
     }
     const path = writeCodexConfig(relayUrl, clientToken);
-    console.log(`AskKing Codex config: ${path}`);
+    console.log(`Codex Done config: ${path}`);
   } else if (command === "pair") {
     const remote = configuredRelay();
     if (remote) {
@@ -142,7 +110,7 @@ async function main() {
         method: "POST",
         body: JSON.stringify({
           name: process.argv[5] ?? "Remote Codex",
-          defaultProjectName: process.argv[6] ?? "AskKing"
+          defaultProjectName: process.argv[6] ?? "Codex"
         })
       });
       console.log(`Client id: ${result.id}`);
@@ -150,38 +118,11 @@ async function main() {
       return;
     }
     const { config, store } = await localStore();
-    const result = store.createClient(process.argv[3] ?? config.defaultClientName, process.argv[4] ?? "AskKing");
+    const result = store.createClient(process.argv[3] ?? config.defaultClientName, process.argv[4] ?? "Codex");
     console.log(`Client id: ${result.id}`);
     console.log(`Client token: ${result.token}`);
-  } else if (command === "mode") {
-    const remote = configuredRelay();
-    if (remote) {
-      await remoteMode(remote.relayUrl, remote.clientToken, process.argv[3]);
-      return;
-    }
-    const { store } = await localStore();
-    const clientId = store.listClients()[0]?.id;
-    if (!clientId) {
-      console.error("No Codex client exists. Run: askking client [name] [defaultProjectName]");
-      process.exit(2);
-    }
-    const requestedMode = process.argv[3];
-    if (requestedMode) {
-      if (requestedMode === "clear" || requestedMode === "default") {
-        store.clearHookMode(clientId);
-        console.log(`Hook mode: ${store.getHookMode(clientId) ?? "notify"} (default)`);
-        process.exit(0);
-      }
-      const mode = normalizeHookMode(requestedMode);
-      if (!mode) {
-        console.error("Mode must be one of: off, notify, approval, full");
-        process.exit(2);
-      }
-      store.setHookMode(clientId, mode);
-    }
-    console.log(`Hook mode: ${store.getHookMode(clientId) ?? "notify"}`);
   } else {
-    console.error("Usage: askking [dev|start|configure <relayUrl> <clientToken>|pair|client [relayUrl adminToken [name] [defaultProjectName]]|mode [off|notify|approval|full|clear]]");
+    console.error("Usage: askking [dev|start|configure <relayUrl> <clientToken>|pair|client [relayUrl adminToken [name] [defaultProjectName]]]");
     process.exit(2);
   }
 }

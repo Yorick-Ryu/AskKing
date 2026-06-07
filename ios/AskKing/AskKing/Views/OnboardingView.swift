@@ -15,7 +15,7 @@ struct OnboardingView: View {
                 .background(.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
             VStack(spacing: 10) {
-                Text("连接 AskKing Relay")
+                Text("连接 Codex Done Relay")
                     .font(.title2.weight(.bold))
                 Text("请输入电脑端生成的配对码，或扫描配对二维码。")
                     .font(.body)
@@ -45,7 +45,7 @@ struct OnboardingView: View {
             Spacer()
         }
         .padding(24)
-        .navigationTitle("AskKing")
+        .navigationTitle("Codex Done")
         .sheet(isPresented: $isShowingScanner) {
             QRCodeScannerView { rawValue in
                 Task { await appState.pair(scannedValue: rawValue) }

@@ -19,11 +19,11 @@ export function printPairingQr(input: PairingQrInput) {
   const payload = pairingQrPayload(input);
   setErrorLevel("L");
   console.log("");
-  console.log("AskKing iOS pairing");
+  console.log("Codex Done iOS pairing");
   console.log(`Relay URL: ${input.relayUrl}`);
   console.log(`Pairing code: ${input.code}`);
   console.log(`Expires at: ${input.expiresAt}`);
-  console.log("Scan this QR code in the AskKing iOS app:");
+  console.log("Scan this QR code in the Codex Done iOS app:");
   generate(payload, { small: true }, (output) => {
     console.log(output);
   });

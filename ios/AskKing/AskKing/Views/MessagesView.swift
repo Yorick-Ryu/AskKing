@@ -18,47 +18,28 @@ struct MessagesView: View {
             NavigationLink(value: EventRoute(kind: event.kind, id: event.id)) {
                 EventRow(event: event, showsDivider: index < filtered.count - 1)
             }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                if event.kind == "completion" {
-                    Button {
-                        Task { await appState.handoffCompletionToComputer(id: event.id) }
-                    } label: {
-                        Label(event.handoffActionTitle, systemImage: "desktopcomputer")
-                    }
-                    .tint(.blue)
-                    .disabled(!event.canHandoffToComputer)
-                }
-            }
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
         }
-        .navigationTitle("AskKing")
+        .navigationTitle("Codex Done")
         .searchable(text: $query, prompt: "搜索项目、摘要或状态")
         .refreshable { await appState.refreshEvents() }
         .task { await appState.refreshEvents() }
         .navigationDestination(for: EventRoute.self) { route in
-            if route.kind == "approval" {
-                ApprovalDetailView(id: route.id)
-            } else {
-                CompletionDetailView(id: route.id)
-            }
+            CompletionDetailView(id: route.id)
         }
         .navigationDestination(isPresented: Binding(
             get: { appState.selectedRoute != nil },
             set: { if !$0 { appState.selectedRoute = nil } }
         )) {
             if let route = appState.selectedRoute {
-                if route.kind == "approval" {
-                    ApprovalDetailView(id: route.id)
-                } else {
-                    CompletionDetailView(id: route.id)
-                }
+                CompletionDetailView(id: route.id)
             }
         }
         .overlay {
             if appState.events.isEmpty {
-                ContentUnavailableView("暂无消息", systemImage: "tray", description: Text("审批和完成事件会显示在这里"))
+                ContentUnavailableView("暂无消息", systemImage: "tray", description: Text("Codex 完成通知会显示在这里"))
             }
         }
     }
@@ -72,12 +53,12 @@ struct EventRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: event.kind == "approval" ? "checkmark.shield" : "checkmark.circle")
+                    Image(systemName: "checkmark.circle")
                         .font(.system(size: 20, weight: .medium))
                         .foregroundStyle(.blue)
                         .frame(width: 22)
 
-                    Text(event.kind == "approval" ? "Codex 请求审批" : "Codex 已完成")
+                    Text("Codex 已完成")
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                 }

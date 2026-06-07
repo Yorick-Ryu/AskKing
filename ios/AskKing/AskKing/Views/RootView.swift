@@ -13,7 +13,7 @@ struct RootView: View {
                 }
             }
         }
-        .alert("AskKing", isPresented: Binding(get: { appState.notice != nil }, set: { if !$0 { appState.notice = nil } })) {
+        .alert("Codex Done", isPresented: Binding(get: { appState.notice != nil }, set: { if !$0 { appState.notice = nil } })) {
             Button("好", role: .cancel) { appState.notice = nil }
         } message: {
             Text(appState.notice ?? "")
@@ -27,7 +27,6 @@ struct RootView: View {
             }
             .tabItem { Label("消息", systemImage: "message.badge") }
             .tag(AppTab.messages)
-            .badge(appState.events.filter { $0.kind == "approval" && $0.status == "pending" && !$0.isNotifyOnly }.count)
 
             NavigationStack {
                 ConnectionView()

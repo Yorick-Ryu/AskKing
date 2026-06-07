@@ -105,7 +105,7 @@ struct ConnectionView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("这会注销当前设备，并停止接收 AskKing 通知。")
+            Text("这会注销当前设备，并停止接收 Codex Done 通知。")
         }
     }
 

@@ -376,16 +376,12 @@ export class Store implements RelayStore {
 
   listEvents(clientId: string, limit = 50): EventListItem[] {
     const rows = this.db.prepare(`
-      select 'approval' as kind, id, project_name as projectName, model, status, command_summary as summary, created_at as createdAt, expires_at as expiresAt, null as reply, notify_only as notifyOnly
-      from approvals
-      where client_id = ?
-      union all
       select 'completion' as kind, id, project_name as projectName, model, status, summary, created_at as createdAt, expires_at as expiresAt, reply, notify_only as notifyOnly
       from completions
       where client_id = ?
       order by createdAt desc
       limit ?
-    `).all(clientId, clientId, limit) as EventListItem[];
+    `).all(clientId, limit) as EventListItem[];
     return rows.map((row) => ({ ...row, notifyOnly: Boolean(row.notifyOnly) }));
   }
 

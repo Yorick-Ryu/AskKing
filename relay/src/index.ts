@@ -30,19 +30,19 @@ function ensureLocalCodexClientConfig(config: ReturnType<typeof loadConfig>, sto
 
   const existingToken = loadExistingClientToken(path);
   if (existingToken && store.getClientByToken(existingToken)) {
-    console.log(`AskKing Codex config: ${path}`);
+    console.log(`Codex Done config: ${path}`);
     return;
   }
 
-  const client = store.createClient(config.defaultClientName, "AskKing");
+  const client = store.createClient(config.defaultClientName, "Codex");
   const payload = {
     relayUrl: "http://localhost:" + config.port,
     clientToken: client.token
   };
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(payload, null, 2) + "\n");
-  console.log(`AskKing Codex client: ${client.id}`);
-  console.log(`AskKing Codex config: ${path}`);
+  console.log(`Codex Done client: ${client.id}`);
+  console.log(`Codex Done config: ${path}`);
 }
 
 function printNewPairingQr(config: ReturnType<typeof loadConfig>, store: Store) {
@@ -68,9 +68,9 @@ export function startRelay() {
   ensureLocalCodexClientConfig(config, store);
 
   const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
-    console.log(`AskKing Relay listening on http://localhost:${info.port}`);
+    console.log(`Codex Done Relay listening on http://localhost:${info.port}`);
     if (!config.publicBaseUrl.includes("localhost")) {
-      console.log(`AskKing Relay LAN URL: ${config.publicBaseUrl}`);
+      console.log(`Codex Done Relay LAN URL: ${config.publicBaseUrl}`);
     }
     scheduleStartupPairingQr(config, store);
     void publishBonjourRelay(config).then((publisher) => {

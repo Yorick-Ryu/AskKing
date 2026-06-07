@@ -1,5 +1,5 @@
 import type { RelayConfig } from "./config.js";
-import type { ApprovalRequest, CompletionEvent, Device } from "./types.js";
+import type { CompletionEvent, Device } from "./types.js";
 
 type PushPayload = {
   aps: {
@@ -12,7 +12,7 @@ type PushPayload = {
     sound?: string;
     "thread-id"?: string;
   };
-  kind: "approval" | "completion";
+  kind: "completion";
   id: string;
   notifyOnly?: boolean;
 };
@@ -23,40 +23,19 @@ export class ApnsSender {
 
   constructor(private config: RelayConfig["apns"]) {}
 
-  async sendApproval(devices: Device[], approval: ApprovalRequest, options: { actionable?: boolean } = {}) {
-    const actionable = options.actionable !== false;
-    const isHighRisk = approval.riskSummary.toLowerCase().includes("high risk");
-    await this.broadcast(devices, {
-      aps: {
-        alert: {
-          title: "Codex 请求审批",
-          body: notificationBody(approval.projectName, "命令", approval.commandSummary)
-        },
-        category: actionable ? isHighRisk ? "ASKKING_APPROVAL_REVIEW" : "ASKKING_APPROVAL" : undefined,
-        sound: "default",
-        "thread-id": approval.id
-      },
-      kind: "approval",
-      id: approval.id,
-      notifyOnly: !actionable
-    });
-  }
-
-  async sendCompletion(devices: Device[], completion: CompletionEvent, options: { actionable?: boolean } = {}) {
-    const actionable = options.actionable !== false;
+  async sendCompletion(devices: Device[], completion: CompletionEvent) {
     await this.broadcast(devices, {
       aps: {
         alert: {
           title: "Codex 已完成",
           body: notificationBody(completion.projectName, "结果", completion.summary)
         },
-        category: actionable ? "ASKKING_COMPLETION" : undefined,
         sound: "default",
         "thread-id": completion.id
       },
       kind: "completion",
       id: completion.id,
-      notifyOnly: !actionable
+      notifyOnly: true
     });
   }
 

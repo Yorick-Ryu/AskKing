@@ -1,10 +1,10 @@
-# AskKing
+# Codex Done
 
-AskKing is a Codex iOS approval relay. It provides:
+Codex Done is a lightweight iOS completion notifier for Codex. It provides:
 
-- iPhone approval and completion notifications for Codex.
+- iPhone completion notifications for Codex `Stop` hooks.
 - A Relay API that can run locally for development or on Cloudflare Workers for public use.
-- Notification actions for approving, denying, and replying from iOS.
+- A read-only iOS app for pairing devices and reviewing completed Codex turns.
 
 ## Setup
 
@@ -22,9 +22,9 @@ cp .env.example .env
 
 Edit `.env` with your local admin token and optional APNs values. The Relay reads `.env` automatically when running local commands, and shell-provided environment variables still take precedence.
 
-Install and trust the AskKing Codex plugin:
+Install and trust the Codex Done plugin:
 
-1. Add the AskKing marketplace from the shell:
+1. Add the marketplace from the shell:
 
     ```sh
     codex plugin marketplace add Yorick-Ryu/AskKing
@@ -42,15 +42,15 @@ Install and trust the AskKing Codex plugin:
     /plugins
     ```
 
-    In the plugin browser, find AskKing and install or enable it.
+    In the plugin browser, find Codex Done and install or enable it.
 
-4. After AskKing is enabled, restart Codex if requested, then run:
+4. After Codex Done is enabled, restart Codex if requested, then run:
 
     ```text
     /hooks
     ```
 
-    Review and trust the AskKing hooks.
+    Review and trust the Codex Done hook.
 
 For public use, deploy the Cloudflare Worker Relay, create a client, then configure local hooks with the remote URL and client token:
 
@@ -68,14 +68,14 @@ pnpm install
 pnpm dev
 ```
 
-Open `ios/AskKing/AskKing.xcodeproj` in Xcode, set your development team and bundle id, run on an iPhone, then connect:
+Open `ios/AskKing/AskKing.xcodeproj` in Xcode, set your development team and bundle id, run Codex Done on an iPhone, then connect:
 
 - Tap scan pairing QR code.
 - Scan the QR code printed by `pnpm dev`.
 
 The local QR code contains the Mac LAN Relay URL and a short-lived pairing code, so the iOS app does not need LAN service discovery for the development flow. Bonjour discovery is still published as a fallback; disable it with `ASKKING_BONJOUR_ENABLED=0`, or rename the advertised service with `ASKKING_BONJOUR_NAME`.
 
-For public deployment, the Cloudflare path uses one D1 database. Client and device tokens are stored only as hashes, hook mode is scoped per Codex client, notify mode does not persist approval/completion records, and approval/full pending records are short-lived rows that are deleted after consumption or expiration.
+For public deployment, the Cloudflare path uses one D1 database. Client and device tokens are stored only as hashes, and Codex completion records are short-lived notification records.
 
 Admin endpoints can list and revoke paired clients/devices:
 

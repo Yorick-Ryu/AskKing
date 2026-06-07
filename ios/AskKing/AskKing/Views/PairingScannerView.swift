@@ -42,7 +42,7 @@ struct QRCodeScannerView: UIViewControllerRepresentable {
         controller.view.layer.addSublayer(preview)
 
         let label = UILabel()
-        label.text = "扫描终端里的 AskKing 配对二维码"
+        label.text = "扫描终端里的 Codex Done 配对二维码"
         label.textColor = .white
         label.font = .preferredFont(forTextStyle: .headline)
         label.textAlignment = .center
