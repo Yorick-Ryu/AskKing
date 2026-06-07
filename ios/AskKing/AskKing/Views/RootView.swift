@@ -35,6 +35,7 @@ struct RootView: View {
             .tag(AppTab.settings)
         }
         .task {
+            await appState.ensureDeviceRegistration()
             await appState.updateNotificationStatus()
         }
     }

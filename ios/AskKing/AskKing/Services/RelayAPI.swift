@@ -13,6 +13,14 @@ struct RelayAPI {
         try await request("api/devices/pair", method: "POST", body: ["code": code], authenticated: false)
     }
 
+    func bootstrapDevice(name: String) async throws -> BootstrapResponse {
+        try await request("api/devices/bootstrap", method: "POST", body: ["name": name], authenticated: false)
+    }
+
+    func refreshCodexToken() async throws -> CodexTokenResponse {
+        try await request("api/mobile/codex-token", method: "POST", body: Optional<String>.none, authenticated: true)
+    }
+
     func register(apnsToken: String) async throws {
         let _: EmptyResponse = try await request("api/mobile/device-token", method: "PUT", body: ["apnsToken": apnsToken], authenticated: true)
     }

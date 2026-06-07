@@ -10,7 +10,7 @@ export type AppEnv = {
   };
 };
 
-function bearer(c: Context) {
+export function bearer(c: Context) {
   const value = c.req.header("authorization") ?? "";
   const [scheme, token] = value.split(/\s+/, 2);
   if (scheme?.toLowerCase() !== "bearer" || !token) return null;

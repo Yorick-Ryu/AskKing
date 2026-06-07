@@ -8,13 +8,12 @@ description: "Use when the user asks to install or configure Codex Done, pair th
 ## Flow Commands
 
 - Configure hooks for a remote Relay: `npx askking@latest configure <relayUrl> <clientToken>`
-- Create a fresh iOS pairing code for the configured Relay: `npx askking@latest pair`
-- Create a remote Codex client with an admin token: `ASKKING_RELAY_URL=<url> ASKKING_ADMIN_TOKEN=<token> npx askking@latest client`
+- The iOS app now creates the `<clientToken>` automatically. Copy the setup prompt from the iOS app and run the command it provides.
 - Start the local development relay from a repository checkout and show the first-run iOS pairing QR code: `pnpm dev`
 
 ## Behavior
 
-Codex Done only installs a Codex `Stop` hook. The hook sends a completion notification to the Relay and iOS app, then immediately returns control to Codex.
+Codex Done only installs a Codex `Stop` hook. The hook sends a completion notification to the iOS device selected by the configured token, then immediately returns control to Codex.
 
 ## Rules
 

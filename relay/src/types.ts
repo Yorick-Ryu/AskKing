@@ -44,6 +44,7 @@ export type Device = {
   name: string;
   apnsToken: string | null;
   sessionTokenHash: string;
+  codexTokenHash: string | null;
   enabled: number;
   createdAt: string;
   lastSeenAt: string;

@@ -42,6 +42,7 @@ export class Store implements RelayStore {
         name text not null,
         apns_token text,
         session_token_hash text not null unique,
+        codex_token_hash text,
         enabled integer not null default 1,
         created_at text not null,
         last_seen_at text not null
@@ -56,6 +57,9 @@ export class Store implements RelayStore {
     const deviceColumns = this.db.prepare("pragma table_info(devices)").all() as { name: string }[];
     if (!deviceColumns.some((column) => column.name === "client_id")) {
       this.db.prepare("alter table devices add column client_id text not null default ''").run();
+    }
+    if (!deviceColumns.some((column) => column.name === "codex_token_hash")) {
+      this.db.prepare("alter table devices add column codex_token_hash text").run();
     }
     const pairingColumns = this.db.prepare("pragma table_info(pairing_codes)").all() as { name: string }[];
     if (!pairingColumns.some((column) => column.name === "client_id")) {
@@ -120,19 +124,41 @@ export class Store implements RelayStore {
     if (!clientId) return null;
     const id = randomToken("dev").slice(0, 22);
     const sessionToken = randomToken("ios");
+    const codexToken = randomToken("cdx");
     this.db.transaction(() => {
       this.db.prepare("update pairing_codes set used_at = ? where code = ?").run(now, code);
       this.db.prepare(`
-        insert into devices (id, client_id, name, session_token_hash, created_at, last_seen_at)
-        values (?, ?, ?, ?, ?, ?)
-      `).run(id, clientId, name, sha256(sessionToken), now, now);
+        insert into devices (id, client_id, name, session_token_hash, codex_token_hash, created_at, last_seen_at)
+        values (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, clientId, name, sha256(sessionToken), sha256(codexToken), now, now);
     })();
-    return { id, sessionToken };
+    return { id, sessionToken, codexToken };
+  }
+
+  createDevice(name: string) {
+    const id = randomToken("dev").slice(0, 22);
+    const sessionToken = randomToken("ios");
+    const codexToken = randomToken("cdx");
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      insert into devices (id, client_id, name, session_token_hash, codex_token_hash, created_at, last_seen_at)
+      values (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, "", name, sha256(sessionToken), sha256(codexToken), now, now);
+    return { id, sessionToken, codexToken };
+  }
+
+  refreshDeviceCodexToken(sessionTokenHash: string) {
+    const codexToken = randomToken("cdx");
+    const result = this.db.prepare("update devices set codex_token_hash = ?, last_seen_at = ? where session_token_hash = ? and enabled = 1")
+      .run(sha256(codexToken), new Date().toISOString(), sessionTokenHash);
+    if (result.changes <= 0) throw new Error("device_not_found");
+    return codexToken;
   }
 
   getDeviceByToken(token: string): Device | null {
     const row = this.db.prepare(`
-      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, enabled, created_at as createdAt, last_seen_at as lastSeenAt
+      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, codex_token_hash as codexTokenHash,
+        enabled, created_at as createdAt, last_seen_at as lastSeenAt
       from devices where session_token_hash = ?
     `).get(sha256(token)) as Device | undefined;
     if (!row || !row.enabled) return null;
@@ -142,7 +168,7 @@ export class Store implements RelayStore {
 
   listDevices(): Device[] {
     return this.db.prepare(`
-      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash,
+      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, codex_token_hash as codexTokenHash,
         enabled, created_at as createdAt, last_seen_at as lastSeenAt
       from devices
       order by created_at desc
@@ -169,9 +195,9 @@ export class Store implements RelayStore {
 
   listPushDevices(clientId?: string): Device[] {
     return this.db.prepare(`
-      select id, clientId, name, apnsToken, sessionTokenHash, enabled, createdAt, lastSeenAt
+      select id, clientId, name, apnsToken, sessionTokenHash, codexTokenHash, enabled, createdAt, lastSeenAt
       from (
-        select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash,
+        select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, codex_token_hash as codexTokenHash,
           enabled, created_at as createdAt, last_seen_at as lastSeenAt,
           row_number() over (partition by apns_token order by last_seen_at desc, created_at desc) as tokenRank
         from devices
@@ -180,6 +206,16 @@ export class Store implements RelayStore {
       where tokenRank = 1
       order by lastSeenAt desc
     `).all(clientId ?? "", clientId ?? "") as Device[];
+  }
+
+  listPushDevicesByCodexToken(token: string): Device[] {
+    return this.db.prepare(`
+      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, codex_token_hash as codexTokenHash,
+        enabled, created_at as createdAt, last_seen_at as lastSeenAt
+      from devices
+      where enabled = 1 and apns_token is not null and codex_token_hash = ?
+      order by last_seen_at desc
+    `).all(sha256(token)) as Device[];
   }
 
   createApproval(input: Omit<ApprovalRequest, "id" | "status" | "decisionSource" | "createdAt" | "decidedAt">) {

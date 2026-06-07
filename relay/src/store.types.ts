@@ -20,6 +20,7 @@ export type CreatedClient = {
 export type PairedDevice = {
   id: string;
   sessionToken: string;
+  codexToken?: string;
 };
 
 export interface RelayStore {
@@ -28,10 +29,13 @@ export interface RelayStore {
   listClients(): MaybePromise<CodexClient[]>;
   revokeClient(clientId: string): MaybePromise<boolean>;
   createPairingCode(input?: PairingCodeInput, ttlSeconds?: number): MaybePromise<PairingCodeResult>;
+  createDevice(name: string): MaybePromise<Required<PairedDevice>>;
   pairDevice(code: string, name: string): MaybePromise<PairedDevice | null>;
   getDeviceByToken(token: string): MaybePromise<Device | null>;
+  refreshDeviceCodexToken(sessionTokenHash: string): MaybePromise<string>;
   listDevices(): MaybePromise<Device[]>;
   revokeDevice(deviceId: string): MaybePromise<boolean>;
   setDeviceApnsToken(sessionTokenHash: string, token: string): MaybePromise<void>;
   listPushDevices(clientId?: string): MaybePromise<Device[]>;
+  listPushDevicesByCodexToken(token: string): MaybePromise<Device[]>;
 }

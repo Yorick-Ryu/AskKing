@@ -4,7 +4,7 @@ Codex Done is a lightweight iOS completion notifier for Codex. It provides:
 
 - iPhone completion notifications for Codex `Stop` hooks.
 - A Relay API that can run locally for development or on Cloudflare Workers for public use.
-- A read-only iOS app for pairing devices and reviewing completed Codex turns.
+- An iOS app that creates a device notification token and a copyable Codex setup prompt.
 
 ## Setup
 
@@ -52,14 +52,13 @@ Install and trust the Codex Done plugin:
 
     Review and trust the Codex Done hook.
 
-For public use, deploy the Cloudflare Worker Relay, create a client, then configure local hooks with the remote URL and client token:
+For public use, install Codex Done on iPhone first. On first launch it creates a device notification token. Copy the setup prompt from the iOS app and paste it into Codex on the computer; the important command is:
 
 ```sh
-npx askking@latest configure https://your-api.example.com ck_...
-npx askking@latest pair
+npx askking@latest configure https://your-api.example.com cdx_...
 ```
 
-The `pair` command calls the configured remote Relay and prints a short-lived iOS pairing code. In this path, the local machine only needs the Codex plugin hooks and `~/.codex/askking/config.json`; it does not need a local Relay or SQLite database.
+That writes `~/.codex/askking/config.json`. After the Codex Done plugin is enabled and the Stop hook is trusted, the computer can send completion notifications directly to that iPhone token. The computer does not need a local Relay or SQLite database.
 
 For local development from a repository checkout, install dev dependencies and start the Relay:
 
@@ -70,12 +69,12 @@ pnpm dev
 
 Open `ios/AskKing/AskKing.xcodeproj` in Xcode, set your development team and bundle id, run Codex Done on an iPhone, then connect:
 
-- Tap scan pairing QR code.
-- Scan the QR code printed by `pnpm dev`.
+- Let the app generate a notification token.
+- Copy the setup prompt from the app into Codex on the computer.
 
-The local QR code contains the Mac LAN Relay URL and a short-lived pairing code, so the iOS app does not need LAN service discovery for the development flow. Bonjour discovery is still published as a fallback; disable it with `ASKKING_BONJOUR_ENABLED=0`, or rename the advertised service with `ASKKING_BONJOUR_NAME`.
+Bonjour discovery is still published as a fallback for local development; disable it with `ASKKING_BONJOUR_ENABLED=0`, or rename the advertised service with `ASKKING_BONJOUR_NAME`.
 
-For public deployment, the Cloudflare path uses one D1 database. Client and device tokens are stored only as hashes, and Codex completion records are short-lived notification records.
+For public deployment, the Cloudflare path uses one D1 database. Device session tokens and Codex notification tokens are stored only as hashes. Completion notifications are not stored.
 
 Admin endpoints can list and revoke paired clients/devices:
 

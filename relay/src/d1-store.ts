@@ -118,22 +118,45 @@ export class D1Store implements RelayStore {
 
     const id = randomToken("dev").slice(0, 22);
     const sessionToken = randomToken("ios");
+    const codexToken = randomToken("cdx");
     const sessionTokenHash = sha256(sessionToken);
     const [update] = await this.db.batch([
       this.db.prepare("update pairing_codes set used_at = ? where code = ? and used_at is null").bind(now, code),
       this.db.prepare(`
-        insert into devices (id, client_id, name, session_token_hash, created_at, last_seen_at)
-        values (?, ?, ?, ?, ?, ?)
-      `).bind(id, clientId, name, sessionTokenHash, now, now)
+        insert into devices (id, client_id, name, session_token_hash, codex_token_hash, created_at, last_seen_at)
+        values (?, ?, ?, ?, ?, ?, ?)
+      `).bind(id, clientId, name, sessionTokenHash, sha256(codexToken), now, now)
     ]);
     if (!hasChanges(update)) return null;
-    return { id, sessionToken };
+    return { id, sessionToken, codexToken };
+  }
+
+  async createDevice(name: string) {
+    const id = randomToken("dev").slice(0, 22);
+    const sessionToken = randomToken("ios");
+    const codexToken = randomToken("cdx");
+    const now = nowIso();
+    await this.db.prepare(`
+      insert into devices (id, client_id, name, session_token_hash, codex_token_hash, created_at, last_seen_at)
+      values (?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, "", name, sha256(sessionToken), sha256(codexToken), now, now).run();
+    return { id, sessionToken, codexToken };
+  }
+
+  async refreshDeviceCodexToken(sessionTokenHash: string) {
+    const codexToken = randomToken("cdx");
+    const result = await this.db.prepare("update devices set codex_token_hash = ?, last_seen_at = ? where session_token_hash = ? and enabled = 1")
+      .bind(sha256(codexToken), nowIso(), sessionTokenHash)
+      .run();
+    if (!hasChanges(result)) throw new Error("device_not_found");
+    return codexToken;
   }
 
   async getDeviceByToken(token: string): Promise<Device | null> {
     const sessionTokenHash = sha256(token);
     const row = await this.db.prepare(`
-      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, enabled, created_at as createdAt, last_seen_at as lastSeenAt
+      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, codex_token_hash as codexTokenHash,
+        enabled, created_at as createdAt, last_seen_at as lastSeenAt
       from devices where session_token_hash = ?
     `).bind(sessionTokenHash).first<Device>();
     if (!row || !row.enabled) return null;
@@ -143,7 +166,7 @@ export class D1Store implements RelayStore {
 
   async listDevices(): Promise<Device[]> {
     const result = await this.db.prepare(`
-      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash,
+      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, codex_token_hash as codexTokenHash,
         enabled, created_at as createdAt, last_seen_at as lastSeenAt
       from devices
       order by created_at desc
@@ -173,7 +196,7 @@ export class D1Store implements RelayStore {
     const result = await this.db.prepare(`
       select id, clientId, name, apnsToken, sessionTokenHash, enabled, createdAt, lastSeenAt
       from (
-        select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash,
+        select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, codex_token_hash as codexTokenHash,
           enabled, created_at as createdAt, last_seen_at as lastSeenAt,
           row_number() over (partition by apns_token order by last_seen_at desc, created_at desc) as tokenRank
         from devices
@@ -182,6 +205,17 @@ export class D1Store implements RelayStore {
       where tokenRank = 1
       order by lastSeenAt desc
     `).bind(clientId ?? "", clientId ?? "").all<Device>();
+    return result.results ?? [];
+  }
+
+  async listPushDevicesByCodexToken(token: string): Promise<Device[]> {
+    const result = await this.db.prepare(`
+      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, codex_token_hash as codexTokenHash,
+        enabled, created_at as createdAt, last_seen_at as lastSeenAt
+      from devices
+      where enabled = 1 and apns_token is not null and codex_token_hash = ?
+      order by last_seen_at desc
+    `).bind(sha256(token)).all<Device>();
     return result.results ?? [];
   }
 

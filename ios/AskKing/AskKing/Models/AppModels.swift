@@ -141,5 +141,18 @@ struct Completion: Identifiable, Codable {
 struct PairResponse: Codable {
     let deviceId: String
     let sessionToken: String
+    let clientToken: String?
+    let relayBaseUrl: String
+}
+
+struct BootstrapResponse: Codable {
+    let deviceId: String
+    let sessionToken: String
+    let clientToken: String
+    let relayBaseUrl: String
+}
+
+struct CodexTokenResponse: Codable {
+    let clientToken: String
     let relayBaseUrl: String
 }

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { redact } from "./crypto.js";
-import { requireAdmin, requireClient, requireDevice, type AppEnv } from "./auth.js";
+import { bearer, requireAdmin, requireClient, requireDevice, type AppEnv } from "./auth.js";
 import type { RelayConfig } from "./config.js";
 import { ApnsSender } from "./apns.js";
 import type { RelayStore } from "./store.types.js";
@@ -101,6 +101,17 @@ export function createApp(config: RelayConfig, store: RelayStore) {
     return c.json({ deviceId: result.id, sessionToken: result.sessionToken, relayBaseUrl: config.publicBaseUrl });
   });
 
+  app.post("/api/devices/bootstrap", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const result = await store.createDevice(text(body.name, "iPhone"));
+    return c.json({ deviceId: result.id, sessionToken: result.sessionToken, clientToken: result.codexToken, relayBaseUrl: config.publicBaseUrl });
+  });
+
+  app.post("/api/mobile/codex-token", requireDevice(store), async (c) => {
+    const token = await store.refreshDeviceCodexToken(c.get("deviceSessionTokenHash")!);
+    return c.json({ clientToken: token, relayBaseUrl: config.publicBaseUrl });
+  });
+
   app.put("/api/mobile/device-token", requireDevice(store), async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const token = text(body.apnsToken);
@@ -115,12 +126,19 @@ export function createApp(config: RelayConfig, store: RelayStore) {
     return c.json({ ok: true });
   });
 
-  app.post("/api/codex/completions", requireClient(store), async (c) => {
+  app.post("/api/codex/completions", async (c) => {
+    const token = bearer(c);
+    if (!token) return c.json({ error: "unauthorized" }, 401);
+    const client = await store.getClientByToken(token);
+    const pushDevices = client
+      ? await store.listPushDevices(client.id)
+      : await store.listPushDevicesByCodexToken(token);
+    if (!client && !pushDevices.length) return c.json({ error: "unauthorized" }, 401);
     const body = await c.req.json().catch(() => ({}));
-    const pushDevices = await store.listPushDevices(c.get("clientId")!);
+    if (client) c.set("clientId", client.id);
     const completion: CompletionEvent = {
       id: crypto.randomUUID(),
-      clientId: c.get("clientId")!,
+      clientId: client?.id ?? "",
       eventId: text(body.eventId, crypto.randomUUID()),
       projectName: text(body.projectName, "Codex"),
       cwd: text(body.cwd),

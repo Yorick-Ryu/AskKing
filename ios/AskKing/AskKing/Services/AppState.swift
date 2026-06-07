@@ -13,6 +13,7 @@ final class AppState: ObservableObject {
     @Published var connectionStatus = "离线"
     @Published var isTestingConnection = false
     @Published var notice: String?
+    @Published var codexClientToken: String?
     @Published var selectedRoute: EventRoute?
     @Published var selectedTab: AppTab = .connection
     @Published var notificationStatus: UNAuthorizationStatus = .notDetermined
@@ -23,6 +24,7 @@ final class AppState: ObservableObject {
     init() {
         relayURLString = UserDefaults.standard.string(forKey: "relayURL") ?? Self.defaultRelayURLString
         isPaired = Self.sessionToken != nil
+        codexClientToken = Self.codexClientToken
         appearance = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "system") ?? .system
     }
 
@@ -44,13 +46,71 @@ final class AppState: ObservableObject {
         KeychainStore.get("deviceId")
     }
 
+    static var codexClientToken: String? {
+        KeychainStore.get("codexClientToken")
+    }
+
+    var codexSetupPrompt: String {
+        let token = codexClientToken ?? ""
+        return """
+        请帮我配置 Codex Done 完成通知。请在这台电脑上执行：
+
+        npx askking@latest configure \(relayURLString) \(token)
+
+        然后确认 Codex Done 插件已安装或启用，并在 /hooks 里信任 Stop hook。配置完成后，Codex 每次完成回复都会把通知发到我的 iPhone。
+        """
+    }
+
     func saveRelayURL() {
         UserDefaults.standard.set(relayURLString, forKey: "relayURL")
     }
 
     func prepareNetworkAccess() async {
+        await ensureDeviceRegistration()
         guard !isPaired else { return }
         await prepareInternetAccess()
+    }
+
+    func ensureDeviceRegistration() async {
+        guard !isTestingConnection else { return }
+        if isPaired {
+            if codexClientToken == nil {
+                await refreshCodexClientToken()
+            }
+            await syncRemoteNotificationsIfAllowed()
+            return
+        }
+
+        do {
+            saveRelayURL()
+            let response = try await api.bootstrapDevice(name: UIDevice.current.name)
+            KeychainStore.set(response.sessionToken, for: "sessionToken")
+            KeychainStore.set(response.deviceId, for: "deviceId")
+            KeychainStore.set(response.clientToken, for: "codexClientToken")
+            relayURLString = response.relayBaseUrl
+            saveRelayURL()
+            codexClientToken = response.clientToken
+            isPaired = true
+            connectionStatus = "在线"
+            await requestNotifications()
+        } catch {
+            guard !isCancellationError(error) else { return }
+            connectionStatus = "离线"
+            notice = error.localizedDescription
+        }
+    }
+
+    func refreshCodexClientToken() async {
+        do {
+            let response = try await api.refreshCodexToken()
+            KeychainStore.set(response.clientToken, for: "codexClientToken")
+            relayURLString = response.relayBaseUrl
+            saveRelayURL()
+            codexClientToken = response.clientToken
+        } catch {
+            guard !isCancellationError(error) else { return }
+            notice = error.localizedDescription
+        }
     }
 
     private func prepareInternetAccess() async {
@@ -70,6 +130,10 @@ final class AppState: ObservableObject {
             let response = try await api.pair(code: trimmedCode)
             KeychainStore.set(response.sessionToken, for: "sessionToken")
             KeychainStore.set(response.deviceId, for: "deviceId")
+            if let clientToken = response.clientToken {
+                KeychainStore.set(clientToken, for: "codexClientToken")
+                codexClientToken = clientToken
+            }
             isPaired = true
             await requestNotifications()
         } catch {
@@ -198,7 +262,9 @@ final class AppState: ObservableObject {
     private func clearLocalPairing() {
         KeychainStore.delete("sessionToken")
         KeychainStore.delete("deviceId")
+        KeychainStore.delete("codexClientToken")
         isPaired = false
+        codexClientToken = nil
         events = []
         connectionStatus = "离线"
     }

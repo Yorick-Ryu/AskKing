@@ -3,13 +3,33 @@ import UIKit
 
 struct ConnectionView: View {
     @EnvironmentObject private var appState: AppState
-    @State private var pairingCode = ""
-    @State private var isShowingScanner = false
-    @State private var isShowingManualPairing = false
     @State private var isConfirmingLogout = false
 
     var body: some View {
         Form {
+            Section("电脑配置") {
+                if let token = appState.codexClientToken, !token.isEmpty {
+                    FieldRow("通知 Token", token)
+                    Button {
+                        UIPasteboard.general.string = appState.codexSetupPrompt
+                        appState.notice = "已复制配置提示词。把它粘贴给电脑上的 Codex 即可。"
+                    } label: {
+                        Label("复制给 Codex 的配置提示词", systemImage: "doc.on.doc")
+                    }
+                    Button {
+                        Task { await appState.refreshCodexClientToken() }
+                    } label: {
+                        Label("重新生成 Token", systemImage: "arrow.clockwise")
+                    }
+                } else {
+                    Button {
+                        Task { await appState.ensureDeviceRegistration() }
+                    } label: {
+                        Label("生成本机通知 Token", systemImage: "iphone.gen3")
+                    }
+                }
+            }
+
             Section("连接") {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Relay 地址")
@@ -64,41 +84,13 @@ struct ConnectionView: View {
                         Label("退出配对", systemImage: "rectangle.portrait.and.arrow.right")
                     }
                 } else {
-                    Button {
-                        isShowingScanner = true
-                    } label: {
-                        Label("扫描配对二维码", systemImage: "qrcode.viewfinder")
-                    }
-
-                    Button {
-                        pairingCode = ""
-                        isShowingManualPairing = true
-                    } label: {
-                        Label("输入配对码", systemImage: "keyboard")
+                    Button { Task { await appState.ensureDeviceRegistration() } } label: {
+                        Label("自动注册这台 iPhone", systemImage: "iphone.gen3")
                     }
                 }
             }
         }
         .navigationTitle("连接")
-        .sheet(isPresented: $isShowingScanner) {
-            QRCodeScannerView { rawValue in
-                if let payload = AskKingPairingPayload(rawValue: rawValue) {
-                    pairingCode = payload.code
-                }
-                Task { await appState.pair(scannedValue: rawValue) }
-            }
-        }
-        .alert("输入配对码", isPresented: $isShowingManualPairing) {
-            TextField("配对码", text: $pairingCode)
-                .textInputAutocapitalization(.characters)
-            Button("取消", role: .cancel) {}
-            Button("配对") {
-                Task { await appState.pair(code: pairingCode) }
-            }
-            .disabled(pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: {
-            Text("请输入电脑端生成的配对码。")
-        }
         .alert("退出配对？", isPresented: $isConfirmingLogout) {
             Button("退出配对", role: .destructive) {
                 Task { await appState.logout() }

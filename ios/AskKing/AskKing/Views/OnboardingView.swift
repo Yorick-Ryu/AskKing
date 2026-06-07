@@ -2,22 +2,21 @@ import SwiftUI
 
 struct OnboardingView: View {
     @EnvironmentObject private var appState: AppState
-    @State private var isShowingScanner = false
 
     var body: some View {
         VStack(spacing: 28) {
             Spacer(minLength: 24)
 
-            Image(systemName: "qrcode.viewfinder")
+            Image(systemName: "iphone.gen3.radiowaves.left.and.right")
                 .font(.system(size: 58, weight: .semibold))
                 .foregroundStyle(.blue)
                 .frame(width: 96, height: 96)
                 .background(.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
             VStack(spacing: 10) {
-                Text("连接 Codex Done Relay")
+                Text("生成通知 Token")
                     .font(.title2.weight(.bold))
-                Text("请输入电脑端生成的配对码，或扫描配对二维码。")
+                Text("Codex Done 会为这台 iPhone 生成一个通知 Token。复制提示词给电脑上的 Codex，就能自动完成配置。")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -25,9 +24,9 @@ struct OnboardingView: View {
             }
 
             Button {
-                isShowingScanner = true
+                Task { await appState.ensureDeviceRegistration() }
             } label: {
-                Label("扫描配对二维码", systemImage: "qrcode.viewfinder")
+                Label("生成 Token", systemImage: "iphone.gen3")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -36,7 +35,7 @@ struct OnboardingView: View {
             NavigationLink {
                 ConnectionView()
             } label: {
-                Label("手动输入连接信息", systemImage: "keyboard")
+                Label("连接设置", systemImage: "network")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
@@ -46,11 +45,6 @@ struct OnboardingView: View {
         }
         .padding(24)
         .navigationTitle("Codex Done")
-        .sheet(isPresented: $isShowingScanner) {
-            QRCodeScannerView { rawValue in
-                Task { await appState.pair(scannedValue: rawValue) }
-            }
-        }
         .task {
             await appState.prepareNetworkAccess()
         }
