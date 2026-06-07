@@ -47,6 +47,7 @@ def post(path: str, payload: Dict[str, Any], timeout: int = 10) -> Dict[str, Any
         headers={
             "content-type": "application/json",
             "authorization": f"Bearer {CLIENT_TOKEN}",
+            "user-agent": "CodexDoneHook/0.1",
         },
         method="POST",
     )
