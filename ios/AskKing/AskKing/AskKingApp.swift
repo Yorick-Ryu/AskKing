@@ -47,8 +47,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
         switch response.actionIdentifier {
         case NotificationActions.allowAction:
+            guard userInfo["notifyOnly"] as? Bool != true else { return }
             await appState?.decideApproval(id: id, decision: "allow")
         case NotificationActions.denyAction:
+            guard userInfo["notifyOnly"] as? Bool != true else { return }
             await appState?.decideApproval(id: id, decision: "deny")
         case NotificationActions.replyAction:
             if let textResponse = response as? UNTextInputNotificationResponse {

@@ -1,9 +1,8 @@
 # End-to-End Setup
 
-This guide covers the full local AskKing flow:
+This guide covers the full AskKing flow:
 
-- Configure Relay environment variables.
-- Start the Relay.
+- Configure a remote Cloudflare Relay or local development Relay.
 - Pair the iOS app.
 - Enable APNs notification delivery.
 - Install the AskKing Codex plugin and trust its hooks.
@@ -18,7 +17,24 @@ cd /Users/yorick/AIProjects/AskKing
 pnpm install
 ```
 
-## 2. Create `.env`
+## 2. Public Cloudflare Path
+
+After deploying the Cloudflare Worker Relay, create a Codex client and configure local hooks:
+
+```sh
+ASKKING_RELAY_URL=https://your-worker.workers.dev \
+ASKKING_ADMIN_TOKEN=<admin-token> \
+  npx askking@latest client
+
+npx askking@latest configure https://your-worker.workers.dev <client-token>
+npx askking@latest pair
+```
+
+In this path the local machine only needs the Codex plugin hooks and `~/.codex/askking/config.json`. It does not need a local Relay or SQLite database.
+
+## 3. Local Development Relay
+
+Create `.env` only when running the development Relay locally.
 
 Create a local environment file:
 
@@ -57,12 +73,12 @@ Use `ASKKING_APNS_PRODUCTION=0` for Xcode development builds. Use `1` only for p
 ASKKING_PUBLIC_BASE_URL=http://<mac-lan-ip>:8787
 ```
 
-## 3. Start Relay
+## 4. Start Local Development Relay
 
 Start the Relay:
 
 ```sh
-npx askking@latest
+pnpm dev
 ```
 
 Keep this terminal running.
@@ -85,17 +101,17 @@ http://<mac-lan-ip>:8787/health
 
 The iPhone must be able to open that URL before pairing or notification actions can work.
 
-## 4. Pair iPhone
+## 5. Pair iPhone
 
 In the iOS app:
 
 1. Tap scan pairing QR code.
-2. Scan the QR code printed by `npx askking@latest`.
+2. Scan the QR code printed by `pnpm dev`.
 3. Allow notification permission when prompted, or request it later from Settings.
 
 Pairing code is for the iPhone only. It is short-lived and single-use.
 
-## 5. Enable Apple Push Notifications
+## 6. Enable Apple Push Notifications
 
 This step is only needed for lock-screen/banner notifications. In-app polling works without APNs.
 
@@ -126,7 +142,7 @@ Xcode project requirements:
 
 After changing APNs values, restart the Relay.
 
-## 6. Install AskKing Codex Plugin
+## 7. Install AskKing Codex Plugin
 
 Install and trust the AskKing Codex plugin:
 
@@ -190,7 +206,7 @@ ASKKING_COMPLETION_SUMMARY_LIMIT=4000
 `ASKKING_HOOK_MODE` controls the overall AskKing hook behavior:
 
 - `off`: no AskKing behavior. Permission and completion hooks return immediately without creating AskKing events.
-- `notify`: notify approval requests and completions, but leave approval and continuation control in Codex.
+- `notify`: send non-actionable approval/completion notifications without persisting approval/completion records, and leave approval and continuation control in Codex.
 - `approval`: hand off approval decisions to iPhone, and only notify completions.
 - `full`: hand off approval decisions to iPhone, notify completions, and wait for iPhone continuation replies.
 
@@ -204,11 +220,11 @@ npx askking@latest mode full
 npx askking@latest mode
 ```
 
-The command writes the mode to the Relay database. Hooks ask the Relay for the current mode every time they run, and long approval/completion waits re-read it while waiting, so changing from `full` to `notify` or `off` releases the current wait.
+The command writes the mode to the configured Relay for the current Codex client. Hooks ask the Relay for the current mode every time they run, and long approval/completion waits re-read it while waiting, so changing from `full` to `notify` or `off` releases the current wait.
 
 `ASKKING_HOOK_MODE` overrides the Relay mode when set. If neither is set, AskKing defaults to `notify`.
 
-## 7. Verify Flow
+## 8. Verify Flow
 
 Approval flow:
 

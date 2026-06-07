@@ -6,12 +6,12 @@ This document keeps implementation and deployment design notes separate from the
 
 AskKing is composed of:
 
-- A local TypeScript/Hono Relay backed by SQLite.
+- A TypeScript/Hono Relay API that can run locally for development or on Cloudflare Workers for public use.
 - A Codex plugin with hooks and a Python hook adapter for `PermissionRequest`, `Stop`, and `UserPromptSubmit`.
 - A SwiftUI iOS client for pairing, approvals, completion events, and continuation replies.
 - Notification actions for approval allow/deny and completion text replies.
 
-The plugin lives at [plugins/askking](../plugins/askking). It includes the hook definitions, an AskKing skill, and a hook entrypoint that reads the generated local Relay token from `~/.codex/askking/config.json`.
+The plugin lives at [plugins/askking](../plugins/askking). It includes the hook definitions, an AskKing skill, and a hook entrypoint that reads the configured Relay URL and client token from `~/.codex/askking/config.json` or environment variables.
 
 ## APNs Implementation
 
@@ -27,27 +27,26 @@ The Relay APNs payloads already use these categories, so lock-screen actions can
 
 Use `ASKKING_APNS_PRODUCTION=1` only for a production-signed app.
 
-On AWS Lambda, prefer Secrets Manager instead of a local key path:
+On Cloudflare Workers, store the APNs key as a Worker secret:
 
 ```sh
-ASKKING_APNS_KEY_SECRET_ID=arn:aws:secretsmanager:...:secret:askking/apns-...
+pnpm exec wrangler secret put ASKKING_APNS_KEY
 ```
 
 ## Public Deployment Path
 
-The local Relay keeps business logic behind storage and push interfaces. The public deployment path is AWS Lambda + DynamoDB:
+The Relay keeps business logic behind storage and push interfaces. The public deployment path is Cloudflare Workers + D1:
 
-- Lambda entrypoint: [relay/src/lambda.ts](../relay/src/lambda.ts).
-- DynamoDB store: [relay/src/dynamo-store.ts](../relay/src/dynamo-store.ts).
-- SAM template: [infra/aws-sam/template.yaml](../infra/aws-sam/template.yaml).
-- Deployment notes: [docs/aws-lambda-deployment.md](aws-lambda-deployment.md).
+- Worker entrypoint: [relay/src/worker.ts](../relay/src/worker.ts).
+- D1 store: [relay/src/d1-store.ts](../relay/src/d1-store.ts).
+- D1 migrations: [migrations](../migrations).
+- Deployment notes: [docs/cloudflare-deployment.md](cloudflare-deployment.md).
 
 The public adapter:
 
-- Uses `hono/aws-lambda`.
-- Replaces SQLite with DynamoDB tables for clients, devices, approvals, completions, and pairing codes.
-- Uses DynamoDB TTL for approval and completion expiry.
-- Keeps the APNs private key in AWS Secrets Manager or SSM Parameter Store.
-- Avoids long Lambda waits from hooks; the hook keeps polling in short requests.
-
-Cloudflare Workers remains a follow-up adapter because direct APNs HTTP/2 behavior must be verified separately.
+- Uses Hono's standard `fetch` interface in a Worker module.
+- Uses one D1 database for client token hashes, iOS session token hashes, client-scoped hook mode settings, pairing codes, approvals, and completions.
+- Stores approvals and completions as short-lived records and deletes terminal records after the Codex hook consumes a decision or reply.
+- Keeps hook mode scoped to each Codex client rather than global.
+- Keeps the APNs private key in Cloudflare Worker secrets.
+- Keeps the local development path on SQLite through [relay/src/store.ts](../relay/src/store.ts).

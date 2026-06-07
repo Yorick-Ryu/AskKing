@@ -15,7 +15,7 @@ export type RelayConfig = {
     teamId: string;
     topic: string;
     keyPath: string;
-    keySecretId: string;
+    keyText: string;
     production: boolean;
   };
 };
@@ -55,6 +55,8 @@ export function loadEnvFile(path = ".env") {
 export function loadConfig(): RelayConfig {
   loadEnvFile();
   const port = Number(process.env.ASKKING_PORT ?? "8787");
+  const apnsEnabled = process.env.ASKKING_APNS_ENABLED === "1";
+  const apnsKeyPath = process.env.ASKKING_APNS_KEY_PATH ?? "";
   const defaultPublicBaseUrl = localNetworkBaseUrl(port);
   return {
     port,
@@ -65,12 +67,14 @@ export function loadConfig(): RelayConfig {
     adminToken: process.env.ASKKING_ADMIN_TOKEN ?? "dev-admin-token",
     defaultClientName: process.env.ASKKING_CLIENT_NAME ?? "Local Codex",
     apns: {
-      enabled: process.env.ASKKING_APNS_ENABLED === "1",
+      enabled: apnsEnabled,
       keyId: process.env.ASKKING_APNS_KEY_ID ?? "",
       teamId: process.env.ASKKING_APNS_TEAM_ID ?? "",
       topic: process.env.ASKKING_APNS_TOPIC ?? "",
-      keyPath: process.env.ASKKING_APNS_KEY_PATH ?? "",
-      keySecretId: process.env.ASKKING_APNS_KEY_SECRET_ID ?? "",
+      keyPath: apnsKeyPath,
+      keyText: apnsEnabled && apnsKeyPath && existsSync(apnsKeyPath)
+        ? readFileSync(apnsKeyPath, "utf8")
+        : process.env.ASKKING_APNS_KEY ?? "",
       production: process.env.ASKKING_APNS_PRODUCTION === "1"
     }
   };

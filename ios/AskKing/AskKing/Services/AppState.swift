@@ -5,11 +5,12 @@ import UserNotifications
 
 @MainActor
 final class AppState: ObservableObject {
+    static let defaultRelayURLString = "https://askking.rick216.cn"
+
     @Published var relayURLString: String
     @Published var isPaired: Bool
     @Published var events: [EventItem] = []
     @Published var connectionStatus = "离线"
-    @Published var isDiscoveringRelay = false
     @Published var isTestingConnection = false
     @Published var notice: String?
     @Published var selectedRoute: EventRoute?
@@ -22,7 +23,7 @@ final class AppState: ObservableObject {
     private var pollingTask: Task<Void, Never>?
 
     init() {
-        relayURLString = UserDefaults.standard.string(forKey: "relayURL") ?? "http://localhost:8787"
+        relayURLString = UserDefaults.standard.string(forKey: "relayURL") ?? Self.defaultRelayURLString
         isPaired = Self.sessionToken != nil
         appearance = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "system") ?? .system
     }
@@ -49,16 +50,9 @@ final class AppState: ObservableObject {
         UserDefaults.standard.set(relayURLString, forKey: "relayURL")
     }
 
-    func prepareLocalNetworkAccess() async {
-        guard !isPaired else { return }
-        _ = await RelayDiscovery.find(timeout: 1.5)
-    }
-
     func prepareNetworkAccess() async {
         guard !isPaired else { return }
-        async let localNetwork: Void = prepareLocalNetworkAccess()
-        async let internetNetwork: Void = prepareInternetAccess()
-        _ = await (localNetwork, internetNetwork)
+        await prepareInternetAccess()
     }
 
     private func prepareInternetAccess() async {
@@ -175,24 +169,6 @@ final class AppState: ObservableObject {
         }
     }
 
-    func discoverRelay() async {
-        guard !isDiscoveringRelay else { return }
-        isDiscoveringRelay = true
-        connectionStatus = "正在查找 Relay"
-        defer { isDiscoveringRelay = false }
-
-        guard let relayURL = await Self.findRelay() else {
-            connectionStatus = "未找到 Relay"
-            notice = "没有在当前局域网发现 AskKing Relay"
-            return
-        }
-
-        relayURLString = relayURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        saveRelayURL()
-        connectionStatus = "在线"
-        notice = "已发现 Relay：\(relayURLString)"
-    }
-
     func refreshEvents() async {
         await refreshEvents(showsError: true)
     }
@@ -260,13 +236,18 @@ final class AppState: ObservableObject {
 
     func logout() async {
         stopPolling()
-        do {
-            try await api.unpairDevice()
-            clearLocalPairing()
-        } catch {
-            guard !isCancellationError(error) else { return }
-            startPolling()
-            notice = error.localizedDescription
+        let pairedAPI = api
+        clearLocalPairing()
+
+        Task {
+            do {
+                try await pairedAPI.unpairDevice()
+            } catch {
+                guard !isCancellationError(error) else { return }
+                await MainActor.run {
+                    notice = "已清除本地配对。远端注销失败：\(error.localizedDescription)"
+                }
+            }
         }
     }
 
@@ -278,25 +259,6 @@ final class AppState: ObservableObject {
         connectionStatus = "离线"
     }
 
-    private static func findRelay() async -> URL? {
-        guard let url = await RelayDiscovery.find() else { return nil }
-        return await isRelayHealthy(url) ? url : nil
-    }
-
-    private static func isRelayHealthy(_ baseURL: URL) async -> Bool {
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 2
-        config.timeoutIntervalForResource = 2
-        let session = URLSession(configuration: config)
-        defer { session.invalidateAndCancel() }
-
-        do {
-            let (_, response) = try await session.data(from: baseURL.appendingPathComponent("health"))
-            return (response as? HTTPURLResponse)?.statusCode == 200
-        } catch {
-            return false
-        }
-    }
 }
 
 func isCancellationError(_ error: Error) -> Bool {

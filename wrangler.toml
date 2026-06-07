@@ -1,0 +1,21 @@
+name = "askking-relay"
+main = "relay/src/worker.ts"
+compatibility_date = "2026-06-06"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+routes = [{ pattern = "askking.rick216.cn", custom_domain = true }]
+
+[[d1_databases]]
+binding = "ASKKING_D1"
+database_name = "askking-relay"
+database_id = "ed6cc059-6557-4c92-86b9-3b2a8f74a1f7"
+migrations_dir = "migrations"
+
+[vars]
+ASKKING_PUBLIC_BASE_URL = "https://askking.rick216.cn"
+ASKKING_CLIENT_NAME = "Cloudflare Codex"
+ASKKING_APNS_ENABLED = "1"
+ASKKING_APNS_KEY_ID = "5Q5LM7TW68"
+ASKKING_APNS_TEAM_ID = "HYB659G8FH"
+ASKKING_APNS_TOPIC = "app.askking.relay"
+ASKKING_APNS_PRODUCTION = "0"

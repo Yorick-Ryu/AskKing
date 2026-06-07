@@ -7,13 +7,6 @@ struct ConnectionView: View {
     @State private var isShowingScanner = false
     @State private var isShowingManualPairing = false
     @State private var isConfirmingLogout = false
-    @State private var didCopyRelayCommand = false
-
-    private let relayCommand = "npx askking@latest"
-
-    private var isRelayUnavailable: Bool {
-        ["离线", "异常", "未找到 Relay"].contains(appState.connectionStatus)
-    }
 
     var body: some View {
         Form {
@@ -22,7 +15,7 @@ struct ConnectionView: View {
                     Text("Relay 地址")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    TextField("http://192.168.1.14:8787", text: $appState.relayURLString)
+                    TextField(AppState.defaultRelayURLString, text: $appState.relayURLString)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         .textSelection(.enabled)
@@ -64,50 +57,7 @@ struct ConnectionView: View {
 
                 FieldRow("配对状态", appState.isPaired ? "已配对" : "未配对")
 
-                if appState.isPaired && isRelayUnavailable {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("设备已配对，但无法连接到 AskKing Relay。", systemImage: "wifi.slash")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-
-                        HStack(spacing: 12) {
-                            Text(relayCommand)
-                                .font(.system(.body, design: .monospaced).weight(.semibold))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                            Button {
-                                copyRelayCommand()
-                            } label: {
-                                Image(systemName: didCopyRelayCommand ? "checkmark" : "doc.on.doc")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .frame(width: 32, height: 32)
-                            }
-                            .buttonStyle(.borderless)
-                            .foregroundStyle(didCopyRelayCommand ? .green : .blue)
-                            .accessibilityLabel(didCopyRelayCommand ? "已复制命令" : "复制命令")
-                        }
-                        .padding(.leading, 16)
-                        .padding(.trailing, 8)
-                        .padding(.vertical, 10)
-                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-
-                    Button {
-                        Task { await appState.discoverRelay() }
-                    } label: {
-                        if appState.isDiscoveringRelay {
-                            Label {
-                                Text("重新连接")
-                            } icon: {
-                                ProgressView()
-                            }
-                        } else {
-                            Label("重新连接", systemImage: "arrow.clockwise")
-                        }
-                    }
-                    .disabled(appState.isDiscoveringRelay)
-                } else if appState.isPaired {
+                if appState.isPaired {
                     Button(role: .destructive) {
                         isConfirmingLogout = true
                     } label: {
@@ -147,7 +97,7 @@ struct ConnectionView: View {
             }
             .disabled(pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         } message: {
-            Text("请输入终端二维码旁显示的配对码。")
+            Text("请输入电脑端生成的配对码。")
         }
         .alert("退出配对？", isPresented: $isConfirmingLogout) {
             Button("退出配对", role: .destructive) {
@@ -159,13 +109,4 @@ struct ConnectionView: View {
         }
     }
 
-    private func copyRelayCommand() {
-        UIPasteboard.general.string = relayCommand
-        didCopyRelayCommand = true
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.2))
-            didCopyRelayCommand = false
-        }
-    }
 }

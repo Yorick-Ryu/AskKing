@@ -3,10 +3,10 @@
 AskKing is a Codex iOS approval relay. It provides:
 
 - iPhone approval and completion notifications for Codex.
-- A local Relay that pairs Codex with the iOS app.
+- A Relay API that can run locally for development or on Cloudflare Workers for public use.
 - Notification actions for approving, denying, and replying from iOS.
 
-## Local Setup
+## Setup
 
 Install dependencies:
 
@@ -52,18 +52,30 @@ Install and trust the AskKing Codex plugin:
 
     Review and trust the AskKing hooks.
 
-Start the Relay:
+For public use, deploy the Cloudflare Worker Relay, create a client, then configure local hooks with the remote URL and client token:
 
 ```sh
-npx askking@latest
+npx askking@latest configure https://your-api.example.com ck_...
+npx askking@latest pair
+```
+
+The `pair` command calls the configured remote Relay and prints a short-lived iOS pairing code. In this path, the local machine only needs the Codex plugin hooks and `~/.codex/askking/config.json`; it does not need a local Relay or SQLite database.
+
+For local development from a repository checkout, install dev dependencies and start the Relay:
+
+```sh
+pnpm install
+pnpm dev
 ```
 
 Open `ios/AskKing/AskKing.xcodeproj` in Xcode, set your development team and bundle id, run on an iPhone, then connect:
 
 - Tap scan pairing QR code.
-- Scan the QR code printed by `npx askking@latest`.
+- Scan the QR code printed by `pnpm dev`.
 
-The QR code contains the Mac LAN Relay URL and a short-lived pairing code, so the iOS app does not need LAN service discovery for the normal setup flow. Bonjour discovery is still published as a fallback; disable it with `ASKKING_BONJOUR_ENABLED=0`, or rename the advertised service with `ASKKING_BONJOUR_NAME`.
+The local QR code contains the Mac LAN Relay URL and a short-lived pairing code, so the iOS app does not need LAN service discovery for the development flow. Bonjour discovery is still published as a fallback; disable it with `ASKKING_BONJOUR_ENABLED=0`, or rename the advertised service with `ASKKING_BONJOUR_NAME`.
+
+For public deployment, the Cloudflare path uses one D1 database. Client and device tokens are stored only as hashes, hook mode is scoped per Codex client, notify mode does not persist approval/completion records, and approval/full pending records are short-lived rows that are deleted after consumption or expiration.
 
 Admin endpoints can list and revoke paired clients/devices:
 
@@ -91,4 +103,5 @@ See [docs/end-to-end-setup.md](https://github.com/Yorick-Ryu/AskKing/blob/main/d
 ## More Docs
 
 - Complete startup, pairing, APNs, and hook installation flow: [docs/end-to-end-setup.md](https://github.com/Yorick-Ryu/AskKing/blob/main/docs/end-to-end-setup.md)
+- Cloudflare Workers + D1 deployment: [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md)
 - Implementation and deployment design notes: [docs/design-and-development.md](docs/design-and-development.md)

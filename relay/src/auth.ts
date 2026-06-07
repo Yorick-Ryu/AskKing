@@ -6,6 +6,7 @@ export type AppEnv = {
   Variables: {
     clientId?: string;
     deviceId?: string;
+    deviceSessionTokenHash?: string;
   };
 };
 
@@ -41,6 +42,8 @@ export function requireDevice(store: RelayStore) {
     const device = await store.getDeviceByToken(token);
     if (!device) return c.json({ error: "unauthorized" }, 401);
     c.set("deviceId", device.id);
+    c.set("clientId", device.clientId);
+    c.set("deviceSessionTokenHash", device.sessionTokenHash);
     await next();
   };
 }

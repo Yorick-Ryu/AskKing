@@ -14,6 +14,7 @@ export type ApprovalRequest = {
   reason: string;
   riskSummary: string;
   status: ApprovalStatus;
+  notifyOnly: boolean;
   decisionSource: string | null;
   createdAt: string;
   expiresAt: string;
@@ -30,6 +31,7 @@ export type CompletionEvent = {
   sessionKey: string;
   summary: string;
   status: CompletionStatus;
+  notifyOnly: boolean;
   createdAt: string;
   expiresAt: string;
   reply: string | null;
@@ -38,6 +40,7 @@ export type CompletionEvent = {
 
 export type Device = {
   id: string;
+  clientId: string;
   name: string;
   apnsToken: string | null;
   sessionTokenHash: string;

@@ -1,7 +1,3 @@
-import { createSign } from "node:crypto";
-import { readFileSync } from "node:fs";
-import http2 from "node:http2";
-import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import type { RelayConfig } from "./config.js";
 import type { ApprovalRequest, CompletionEvent, Device } from "./types.js";
 
@@ -18,46 +14,49 @@ type PushPayload = {
   };
   kind: "approval" | "completion";
   id: string;
+  notifyOnly?: boolean;
 };
 
 export class ApnsSender {
-  private key: string | null = null;
-  private keyPromise: Promise<string> | null = null;
+  private key: CryptoKey | null = null;
+  private keyPromise: Promise<CryptoKey> | null = null;
 
-  constructor(private config: RelayConfig["apns"]) {
-    if (config.enabled && config.keyPath) this.key = readFileSync(config.keyPath, "utf8");
-  }
+  constructor(private config: RelayConfig["apns"]) {}
 
-  async sendApproval(devices: Device[], approval: ApprovalRequest) {
+  async sendApproval(devices: Device[], approval: ApprovalRequest, options: { actionable?: boolean } = {}) {
+    const actionable = options.actionable !== false;
     const isHighRisk = approval.riskSummary.toLowerCase().includes("high risk");
     await this.broadcast(devices, {
       aps: {
         alert: {
-          title: "Codex 需要批准",
+          title: "Codex 请求审批",
           body: notificationBody(approval.projectName, "命令", approval.commandSummary)
         },
-        category: isHighRisk ? "ASKKING_APPROVAL_REVIEW" : "ASKKING_APPROVAL",
+        category: actionable ? isHighRisk ? "ASKKING_APPROVAL_REVIEW" : "ASKKING_APPROVAL" : undefined,
         sound: "default",
         "thread-id": approval.id
       },
       kind: "approval",
-      id: approval.id
+      id: approval.id,
+      notifyOnly: !actionable
     });
   }
 
-  async sendCompletion(devices: Device[], completion: CompletionEvent) {
+  async sendCompletion(devices: Device[], completion: CompletionEvent, options: { actionable?: boolean } = {}) {
+    const actionable = options.actionable !== false;
     await this.broadcast(devices, {
       aps: {
         alert: {
           title: "Codex 已完成",
           body: notificationBody(completion.projectName, "结果", completion.summary)
         },
-        category: "ASKKING_COMPLETION",
+        category: actionable ? "ASKKING_COMPLETION" : undefined,
         sound: "default",
         "thread-id": completion.id
       },
       kind: "completion",
-      id: completion.id
+      id: completion.id,
+      notifyOnly: !actionable
     });
   }
 
@@ -70,77 +69,58 @@ export class ApnsSender {
       console.info("[apns] disabled; would send", payload.kind, payload.id, "to", devices.length, "device(s)");
       return;
     }
+    console.info("[apns] sending", payload.kind, payload.id, "to", devices.filter((device) => device.apnsToken).length, "device(s)");
     await Promise.all(devices.map((device) => device.apnsToken ? this.send(device.apnsToken, payload) : undefined));
   }
 
   private async send(deviceToken: string, payload: PushPayload) {
     const host = this.config.production ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com";
-    const client = http2.connect(host);
-    let jwt: string;
-    try {
-      jwt = await this.jwt();
-    } catch (error) {
-      client.close();
-      throw error;
-    }
-    return new Promise<void>((resolve, reject) => {
-      const req = client.request({
-        ":method": "POST",
-        ":path": `/3/device/${deviceToken}`,
-        authorization: `bearer ${jwt}`,
+    const response = await fetch(`${host}/3/device/${deviceToken}`, {
+      method: "POST",
+      headers: {
+        authorization: `bearer ${await this.jwt()}`,
         "apns-topic": this.config.topic,
         "apns-push-type": "alert",
-        "apns-priority": "10"
-      });
-      let body = "";
-      req.setEncoding("utf8");
-      req.on("data", (chunk) => {
-        body += chunk;
-      });
-      req.on("error", (error) => {
-        client.close();
-        reject(error);
-      });
-      req.on("end", () => {
-        client.close();
-        if (body) console.warn("[apns] response", body);
-        resolve();
-      });
-      req.end(JSON.stringify(payload));
+        "apns-priority": "10",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload)
     });
+    if (!response.ok) {
+      console.warn("[apns] response", response.status, await response.text());
+    } else {
+      console.info("[apns] delivered", payload.kind, payload.id, response.status);
+    }
   }
 
   private async jwt() {
     const key = await this.loadKey();
-    const header = Buffer.from(JSON.stringify({ alg: "ES256", kid: this.config.keyId })).toString("base64url");
-    const claims = Buffer.from(JSON.stringify({ iss: this.config.teamId, iat: Math.floor(Date.now() / 1000) })).toString("base64url");
-    const sign = createSign("sha256");
-    sign.update(`${header}.${claims}`);
-    sign.end();
-    const signature = sign.sign(key).toString("base64url");
+    const header = base64UrlEncode(JSON.stringify({ alg: "ES256", kid: this.config.keyId }));
+    const claims = base64UrlEncode(JSON.stringify({ iss: this.config.teamId, iat: Math.floor(Date.now() / 1000) }));
+    const signature = base64UrlEncode(new Uint8Array(await crypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      key,
+      new TextEncoder().encode(`${header}.${claims}`)
+    )));
     return `${header}.${claims}.${signature}`;
   }
 
   private async loadKey() {
     if (this.key) return this.key;
     if (!this.keyPromise) {
-      this.keyPromise = this.loadKeyFromSecret().then((key) => {
-        this.key = key;
-        return key;
+      this.keyPromise = Promise.resolve(this.loadKeyText()).then(async (keyText) => {
+        this.key = await importPrivateKey(keyText);
+        return this.key;
       });
     }
     return this.keyPromise;
   }
 
-  private async loadKeyFromSecret() {
-    if (!this.config.keySecretId) {
-      throw new Error("ASKKING_APNS_KEY_PATH or ASKKING_APNS_KEY_SECRET_ID is required when APNs is enabled");
+  private loadKeyText() {
+    if (!this.config.keyText) {
+      throw new Error("ASKKING_APNS_KEY or ASKKING_APNS_KEY_PATH is required when APNs is enabled");
     }
-    const client = new SecretsManagerClient({});
-    const response = await client.send(new GetSecretValueCommand({ SecretId: this.config.keySecretId }));
-    if (response.SecretString) return parseSecretString(response.SecretString);
-    if (response.SecretBinary) return Buffer.from(response.SecretBinary).toString("utf8");
-    throw new Error(`APNs key secret ${this.config.keySecretId} has no string or binary value`);
+    return parseSecretString(this.config.keyText);
   }
 }
 
@@ -164,4 +144,30 @@ function parseSecretString(secret: string) {
     if (typeof key === "string" && key.trim()) return key;
   }
   return secret;
+}
+
+function base64UrlEncode(value: string | Uint8Array) {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function importPrivateKey(pem: string) {
+  const body = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s+/g, "");
+  const binary = atob(body);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return await crypto.subtle.importKey(
+    "pkcs8",
+    bytes,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"]
+  );
 }

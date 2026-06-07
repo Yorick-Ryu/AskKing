@@ -35,6 +35,9 @@ struct ApprovalDetailView: View {
                     FieldRow("项目", approval.projectName)
                     FieldRow("目录", approval.cwd)
                     FieldRow("模型", approval.model)
+                    if approval.isNotifyOnly {
+                        FieldRow("类型", "仅通知")
+                    }
                     if approval.status == "pending" {
                         ApprovalStatusRow(status: approval.status, expiresAt: approval.expiresAt)
                     } else {
@@ -49,12 +52,14 @@ struct ApprovalDetailView: View {
         .navigationTitle("审批详情")
         .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom) {
-            if let approval, approval.status == "pending" {
+            if let approval, approval.status == "pending", !approval.isNotifyOnly {
                 ApprovalActionBar(
                     isWorking: isWorking,
                     allow: { Task { await decide("allow") } },
                     deny: { Task { await decide("deny") } }
                 )
+            } else if let approval, approval.status == "pending", approval.isNotifyOnly {
+                NotifyOnlyApprovalBar()
             }
         }
         .task { await load() }
@@ -79,6 +84,26 @@ struct ApprovalDetailView: View {
             guard !isCancellationError(error) else { return }
             appState.notice = error.localizedDescription
         }
+    }
+}
+
+private struct NotifyOnlyApprovalBar: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "bell")
+                .font(.headline)
+            Text("仅通知，无法在 App 中审批")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.regularMaterial, in: Capsule())
+        .padding(.horizontal, 18)
+        .padding(.bottom, 8)
     }
 }
 

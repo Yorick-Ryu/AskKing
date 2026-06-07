@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "AskKing",
     "shortDescription": "Send Codex approvals and completions to iOS.",
-    "longDescription": "AskKing installs Codex lifecycle hooks that forward approval requests, completion notifications, and local continuation prompts to a local AskKing Relay for review from the iOS app.",
+    "longDescription": "AskKing installs Codex lifecycle hooks that forward approval requests, completion notifications, and continuation replies to a configured AskKing Relay for review from the iOS app.",
     "developerName": "AskKing",
     "category": "Productivity",
     "capabilities": [

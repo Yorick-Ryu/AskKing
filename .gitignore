@@ -8,6 +8,7 @@ askking.sqlite
 askking.sqlite-*
 .DS_Store
 dist/
+.wrangler/
 ios/AskKing/build/
 DerivedData/
 xcuserdata/

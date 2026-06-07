@@ -27,7 +27,7 @@ struct RootView: View {
             }
             .tabItem { Label("消息", systemImage: "message.badge") }
             .tag(AppTab.messages)
-            .badge(appState.events.filter { $0.kind == "approval" && $0.status == "pending" }.count)
+            .badge(appState.events.filter { $0.kind == "approval" && $0.status == "pending" && !$0.isNotifyOnly }.count)
 
             NavigationStack {
                 ConnectionView()

@@ -163,8 +163,7 @@ AskKing 中继必须支持两种部署模式。
 
 公网部署目标：
 
-- Cloudflare Workers。
-- AWS Lambda。
+- Cloudflare Workers + D1。
 
 ## 5. 技术栈建议
 
@@ -224,14 +223,14 @@ AskKing 中继必须支持两种部署模式。
 理由：
 
 - Hono 足够轻，不像 NestJS 那样重。
-- 同一套路由和业务逻辑可适配 Node、本地服务、Cloudflare Workers、AWS Lambda。
+- 同一套路由和业务逻辑可适配 Node、本地服务、Cloudflare Workers。
 - 适合小型中继服务。
 - 比 FastAPI 更容易复用到 Cloudflare Workers。
 
 不建议第一版使用：
 
 - NestJS：功能完整，但对这个中继过重。
-- FastAPI：本地和 AWS 可行，但 Cloudflare Workers 适配差。
+- FastAPI：本地可行，但 Cloudflare Workers 适配差。
 - WebSocket：第一版没有必要，轮询足够。
 
 ### 5.4 存储
@@ -244,21 +243,14 @@ AskKing 中继必须支持两种部署模式。
 
 Cloudflare Workers：
 
-- D1 保存设备、客户端和历史事件。
-- Durable Objects 或 KV 保存短期 pending 状态。
-- 如果 APNs 直连或等待请求不稳定，需要做专项 POC。
-
-AWS Lambda：
-
-- DynamoDB 保存设备、客户端、审批请求和完成事件。
-- TTL 自动清理过期请求。
-- Lambda 内可使用 Node.js `http2` 或成熟 APNs 库发送推送。
+- D1 保存设备、客户端、审批请求、完成事件和 hook 设置。
+- 短期 pending 状态也落在 D1，终态被 hook 消费后删除。
 
 抽象要求：
 
 - Relay 代码应把存储封装为接口。
-- 业务逻辑不直接绑定 SQLite、D1 或 DynamoDB。
-- 第一版可以只实现 SQLite 和一个公网存储，另一个公网存储作为后续适配。
+- 业务逻辑不直接绑定 SQLite 或 D1。
+- 第一版实现 SQLite 和 Cloudflare D1 两个存储。
 
 ### 5.5 APNs
 
@@ -271,8 +263,7 @@ AWS Lambda：
 风险：
 
 - APNs Provider API 要求 HTTP/2。
-- AWS Lambda 的 Node.js 环境更适合直接使用 HTTP/2 或现成 APNs 库。
-- Cloudflare Workers 能否稳定直接调用 APNs，需要先做最小 POC。若 POC 不通过，Cloudflare 方案需要改为调用一个专门的 APNs sender，或优先使用 AWS Lambda。
+- Cloudflare Workers 直接调用 APNs 需要端到端真机验证。
 
 ### 5.6 轮询策略
 
@@ -568,8 +559,7 @@ AWS Lambda：
 部署：
 
 - 同一套产品能力可在局域网自部署模式下跑通。
-- 公网模式至少跑通 AWS Lambda 或 Cloudflare Workers 之一。
-- 另一个公网平台保留清晰的部署适配路径。
+- 公网模式跑通 Cloudflare Workers + D1。
 
 iOS：
 
@@ -590,7 +580,7 @@ iOS：
 5. 命令审批闭环：Codex -> Relay -> iOS -> Relay -> Codex。
 6. Stop 完成通知：先只通知，不继续。
 7. Stop 短窗口回复：iOS 回复 -> Relay -> Codex continuation。
-8. 公网部署适配：优先 AWS Lambda，随后验证 Cloudflare Workers。
+8. 公网部署适配：Cloudflare Workers + D1。
 9. 通知快捷动作：允许、拒绝、文本回复。
 10. 安全加固：token 撤销、日志脱敏、高危请求二次确认。
 
@@ -610,4 +600,3 @@ iOS：
 - Apple `UNTextInputNotificationAction`：https://developer.apple.com/documentation/usernotifications/untextinputnotificationaction
 - Apple APNs Provider API：https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/sending_notification_requests_to_apns
 - Cloudflare Workers：https://developers.cloudflare.com/workers/
-- AWS Lambda Node.js：https://docs.aws.amazon.com/lambda/latest/dg/lambda-nodejs.html

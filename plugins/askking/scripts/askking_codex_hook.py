@@ -63,7 +63,7 @@ MODE_BEHAVIOR = {
         "handoff_approval": False,
         "notify_completion": True,
         "handoff_completion": False,
-        "sync_local_prompt": True,
+        "sync_local_prompt": False,
     },
     "approval": {
         "enabled": True,
@@ -268,6 +268,7 @@ def handle_permission(payload: Dict[str, Any]) -> None:
         permission_fallback()
         return
     try:
+        notify_only = not behavior["handoff_approval"]
         created = post("/api/codex/approvals", {
             "eventId": first_string(payload, "eventId", "event_id", "turnId", "turn_id", default=str(time.time())),
             "projectName": project_name(payload),
@@ -295,6 +296,7 @@ def handle_permission(payload: Dict[str, Any]) -> None:
             ),
             "riskSummary": first_string(payload, "riskSummary", "risk_summary"),
             "ttlSeconds": APPROVAL_TIMEOUT_SECONDS,
+            "notifyOnly": notify_only,
         })
         approval = created["approval"]
         if not behavior["handoff_approval"]:
@@ -332,6 +334,7 @@ def handle_stop(payload: Dict[str, Any]) -> None:
             stop_ok()
             return
         wait_for_reply = behavior["handoff_completion"]
+        notify_only = not wait_for_reply and read_hook_mode() == "notify"
         created = post("/api/codex/completions", {
             "eventId": first_string(payload, "eventId", "event_id", "turnId", "turn_id", default=str(time.time())),
             "projectName": project_name(payload),
@@ -341,6 +344,7 @@ def handle_stop(payload: Dict[str, Any]) -> None:
             "summary": summary,
             "waitForReply": wait_for_reply,
             "ttlSeconds": STOP_WAIT_SECONDS,
+            "notifyOnly": notify_only,
         })
         completion = created["completion"]
         CURRENT_COMPLETION_ID = completion["id"]

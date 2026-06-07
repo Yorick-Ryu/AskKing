@@ -77,12 +77,12 @@ struct EventRow: View {
                         .foregroundStyle(.blue)
                         .frame(width: 22)
 
-                    Text(event.kind == "approval" ? "Codex 需要批准" : "Codex 已完成")
+                    Text(event.kind == "approval" ? "Codex 请求审批" : "Codex 已完成")
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                EventStatusView(status: event.status, expiresAt: event.expiresAt)
+                EventStatusView(status: event.isNotifyOnly ? "仅通知" : event.status, expiresAt: event.isNotifyOnly ? nil : event.expiresAt)
             }
 
             Text(event.summary.replacingOccurrences(of: "\n", with: " "))
@@ -137,6 +137,7 @@ struct StatusBadge: View {
 
     var color: Color {
         switch status {
+        case "仅通知": .secondary
         case "pending", "waiting": .orange
         case "allowed", "replied": .green
         case "denied", "interrupted": .red

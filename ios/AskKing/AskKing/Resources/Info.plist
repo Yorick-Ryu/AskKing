@@ -46,6 +46,6 @@
 	<key>NSCameraUsageDescription</key>
 	<string>AskKing 需要使用相机扫描终端中的配对二维码。</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>AskKing 需要访问局域网中的 Relay，以便在应用内接收 Codex 审批和完成消息。</string>
+	<string>AskKing 使用远端 Relay 接收审批和完成通知。</string>
 </dict>
 </plist>

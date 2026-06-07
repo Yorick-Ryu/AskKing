@@ -12,11 +12,17 @@ export type EventListItem = {
   createdAt: string;
   expiresAt: string;
   reply?: string | null;
+  notifyOnly?: boolean;
+};
+
+export type PairingCodeInput = {
+  clientId?: string;
 };
 
 export type PairingCodeResult = {
   code: string;
   expiresAt: string;
+  clientId?: string;
 };
 
 export type CreatedClient = {
@@ -34,20 +40,25 @@ export interface RelayStore {
   getClientByToken(token: string): MaybePromise<CodexClient | null>;
   listClients(): MaybePromise<CodexClient[]>;
   revokeClient(clientId: string): MaybePromise<boolean>;
-  createPairingCode(ttlSeconds?: number): MaybePromise<PairingCodeResult>;
+  createPairingCode(input?: PairingCodeInput, ttlSeconds?: number): MaybePromise<PairingCodeResult>;
   pairDevice(code: string, name: string): MaybePromise<PairedDevice | null>;
   getDeviceByToken(token: string): MaybePromise<Device | null>;
   listDevices(): MaybePromise<Device[]>;
+  hasEnabledDevice(clientId: string): MaybePromise<boolean>;
   revokeDevice(deviceId: string): MaybePromise<boolean>;
-  setDeviceApnsToken(deviceId: string, token: string): MaybePromise<void>;
-  listPushDevices(): MaybePromise<Device[]>;
+  setDeviceApnsToken(sessionTokenHash: string, token: string): MaybePromise<void>;
+  listPushDevices(clientId?: string): MaybePromise<Device[]>;
   createApproval(input: Omit<ApprovalRequest, "id" | "status" | "decisionSource" | "createdAt" | "decidedAt">): MaybePromise<ApprovalRequest>;
-  getApproval(id: string): MaybePromise<ApprovalRequest | null>;
-  decideApproval(id: string, status: "allowed" | "denied", source: string): MaybePromise<ApprovalRequest | null>;
+  getApproval(id: string, clientId?: string): MaybePromise<ApprovalRequest | null>;
+  expireApproval(id: string, clientId: string): MaybePromise<ApprovalRequest | null>;
+  decideApproval(id: string, clientId: string, status: "allowed" | "denied", source: string): MaybePromise<ApprovalRequest | null>;
+  consumeTerminalApproval(id: string, clientId: string): MaybePromise<ApprovalRequest | null>;
   createCompletion(input: Omit<CompletionEvent, "id" | "createdAt" | "reply" | "repliedAt">): MaybePromise<CompletionEvent>;
-  getCompletion(id: string): MaybePromise<CompletionEvent | null>;
-  replyCompletion(id: string, reply: string): MaybePromise<CompletionEvent | null>;
-  interruptCompletion(id: string): MaybePromise<CompletionEvent | null>;
+  getCompletion(id: string, clientId?: string): MaybePromise<CompletionEvent | null>;
+  expireCompletion(id: string, clientId: string): MaybePromise<CompletionEvent | null>;
+  replyCompletion(id: string, clientId: string, reply: string): MaybePromise<CompletionEvent | null>;
+  interruptCompletion(id: string, clientId: string): MaybePromise<CompletionEvent | null>;
+  consumeTerminalCompletion(id: string, clientId: string): MaybePromise<CompletionEvent | null>;
   continueLatestCompletionLocally(input: {
     clientId: string;
     cwd: string;
@@ -55,9 +66,8 @@ export interface RelayStore {
     sessionKey: string;
     prompt: string;
   }): MaybePromise<CompletionEvent | null>;
-  getHookMode(): MaybePromise<HookMode | null>;
-  setHookMode(mode: HookMode): MaybePromise<HookMode>;
-  clearHookMode(): MaybePromise<void>;
-  listEvents(limit?: number): MaybePromise<EventListItem[]>;
-  expireOld(): MaybePromise<void>;
+  getHookMode(clientId: string): MaybePromise<HookMode | null>;
+  setHookMode(clientId: string, mode: HookMode): MaybePromise<HookMode>;
+  clearHookMode(clientId: string): MaybePromise<void>;
+  listEvents(clientId: string, limit?: number): MaybePromise<EventListItem[]>;
 }

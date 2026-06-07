@@ -11,10 +11,12 @@ const adminToken = "dev-admin-token";
 
 let server;
 let globalClientToken;
+let serverStderr = "";
 
 try {
   const clientOutput = await run("node", ["dist/cli.js", "client", "SmokeClient", "SmokeProject"], {
-    ASKKING_DB: dbPath
+    ASKKING_DB: dbPath,
+    ASKKING_APNS_ENABLED: "0"
   });
   const clientToken = match(clientOutput, /Client token: (.+)/);
   globalClientToken = clientToken;
@@ -25,6 +27,7 @@ try {
       ...process.env,
       ASKKING_DB: dbPath,
       ASKKING_ADMIN_TOKEN: adminToken,
+      ASKKING_APNS_ENABLED: "0",
       ASKKING_WRITE_CODEX_CONFIG: "0",
       ASKKING_PAIR_ON_START: "0",
       ASKKING_PORT: String(port)
@@ -48,6 +51,7 @@ try {
     })
   });
   assert(approval.approval.status === "pending", "approval starts pending");
+  assert(approval.approval.notifyOnly === false, "approval is actionable by default");
   assert(approval.approval.riskSummary === "", "normal approval has no fallback risk summary");
 
   const pairing = await requestJson(`${baseUrl}/api/admin/pairing-code`, {
@@ -101,13 +105,17 @@ try {
     headers: { authorization: `Bearer ${clientToken}` }
   });
   assert(approvalWait.approval.status === "allowed", "Codex wait sees allowed decision");
+  const repeatedApprovalWait = await request(`${baseUrl}/api/codex/approvals/${approval.approval.id}/wait?timeoutMs=1000`, {
+    headers: { authorization: `Bearer ${clientToken}` }
+  }, false);
+  assert(repeatedApprovalWait.status === 404, "approval terminal result is read once by Codex");
 
-  const repeatedDecision = await requestJson(`${baseUrl}/api/mobile/approvals/${approval.approval.id}/decision`, {
+  const repeatedDecision = await request(`${baseUrl}/api/mobile/approvals/${approval.approval.id}/decision`, {
     method: "POST",
     headers: authHeaders(paired.sessionToken),
     body: JSON.stringify({ decision: "deny" })
-  });
-  assert(repeatedDecision.approval.status === "allowed", "repeated approval decision keeps first decision");
+  }, false);
+  assert(repeatedDecision.status === 404, "approval is deleted after Codex consumes the decision");
 
   const sensitiveApproval = await requestJson(`${baseUrl}/api/codex/approvals`, {
     method: "POST",
@@ -222,6 +230,14 @@ try {
   });
   assert(completionWait.completion.status === "replied", "Codex wait sees completion reply");
   assert(completionWait.completion.reply === "continue with smoke test", "Codex wait receives continuation text");
+  const repeatedCompletionWait = await request(`${baseUrl}/api/codex/completions/${completion.completion.id}/wait?timeoutMs=1000`, {
+    headers: { authorization: `Bearer ${clientToken}` }
+  }, false);
+  assert(repeatedCompletionWait.status === 404, "completion terminal result is read once by Codex");
+  const consumedCompletion = await request(`${baseUrl}/api/mobile/completions/${completion.completion.id}`, {
+    headers: authHeaders(paired.sessionToken)
+  }, false);
+  assert(consumedCompletion.status === 404, "completion is deleted after Codex consumes the reply");
 
   const notifiedCompletion = await requestJson(`${baseUrl}/api/codex/completions`, {
     method: "POST",
@@ -236,6 +252,30 @@ try {
     })
   });
   assert(notifiedCompletion.completion.status === "notified", "notify-only completion starts notified");
+
+  const serverNotifyOnlyCompletion = await requestJson(`${baseUrl}/api/codex/completions`, {
+    method: "POST",
+    headers: authHeaders(clientToken),
+    body: JSON.stringify({
+      projectName: "Smoke",
+      cwd: process.cwd(),
+      sessionKey: "server-notify-only-session",
+      summary: "Server notifyOnly completion.",
+      notifyOnly: true,
+      ttlSeconds: 60
+    })
+  });
+  assert(serverNotifyOnlyCompletion.completion.status === "notified", "server notifyOnly completion does not wait even with devices paired");
+  assert(serverNotifyOnlyCompletion.completion.notifyOnly === true, "server notifyOnly completion is marked notify-only");
+  const serverNotifyOnlyEvents = await listEvents(paired.sessionToken);
+  const serverNotifyOnlyEvent = serverNotifyOnlyEvents.find((event) => event.kind === "completion" && event.summary === "Server notifyOnly completion.");
+  assert(serverNotifyOnlyEvent?.notifyOnly === true, "server notifyOnly completion is persisted as notify-only");
+  const serverNotifyOnlyReply = await request(`${baseUrl}/api/mobile/completions/${serverNotifyOnlyCompletion.completion.id}/reply`, {
+    method: "POST",
+    headers: authHeaders(paired.sessionToken),
+    body: JSON.stringify({ reply: "should not be accepted" })
+  }, false);
+  assert(serverNotifyOnlyReply.status === 409, "server notifyOnly completion cannot be replied from mobile");
 
   const localPrompt = await requestJson(`${baseUrl}/api/codex/completions/local-prompt`, {
     method: "POST",
@@ -393,7 +433,18 @@ try {
   }, clientToken, {
   });
   assert(notifyPermissionHookOutput === "{}", "notify mode lets Codex keep local approval control");
-  await waitForEvent(paired.sessionToken, "approval", "echo hook notify");
+  const notifyPermissionEvent = await waitForEvent(paired.sessionToken, "approval", "echo hook notify");
+  assert(notifyPermissionEvent.notifyOnly === true, "notify mode persists a non-actionable approval notification");
+  const notifyPermissionDetail = await requestJson(`${baseUrl}/api/mobile/approvals/${notifyPermissionEvent.id}`, {
+    headers: authHeaders(paired.sessionToken)
+  });
+  assert(notifyPermissionDetail.approval.notifyOnly === true, "notify approval detail is marked non-actionable");
+  const notifyDecision = await request(`${baseUrl}/api/mobile/approvals/${notifyPermissionEvent.id}/decision`, {
+    method: "POST",
+    headers: authHeaders(paired.sessionToken),
+    body: JSON.stringify({ decision: "allow" })
+  }, false);
+  assert(notifyDecision.status === 409, "notify approval cannot be decided from mobile");
 
   const notifyStopHookOutput = await runHook({
     hookEventName: "Stop",
@@ -408,6 +459,13 @@ try {
   assert(notifyStopHookOutput === "{}", "notify mode does not wait for completion replies");
   const notifyModeCompletionEvent = await waitForEvent(paired.sessionToken, "completion", "Hook stop notify mode.");
   assert(notifyModeCompletionEvent.status === "notified", "notify mode creates notified completion");
+  assert(notifyModeCompletionEvent.notifyOnly === true, "notify mode persists completion as notify-only");
+  const notifyModeCompletionReply = await request(`${baseUrl}/api/mobile/completions/${notifyModeCompletionEvent.id}/reply`, {
+    method: "POST",
+    headers: authHeaders(paired.sessionToken),
+    body: JSON.stringify({ reply: "should not be accepted" })
+  }, false);
+  assert(notifyModeCompletionReply.status === 409, "notify mode completion cannot be replied from mobile");
 
   await setRelayHookMode("approval");
   const approvalModePermissionHook = runHook({
@@ -510,6 +568,7 @@ try {
   assert(stopHookNotifyOnly === "{}", "Stop hook notify mode returns immediately");
   const notifyOnlyEvent = await waitForEvent(paired.sessionToken, "completion", "Hook stop notify only.");
   assert(notifyOnlyEvent.status === "notified", "Stop hook notify mode creates notified completion");
+  assert(notifyOnlyEvent.notifyOnly === true, "Stop hook notify mode persists completion as notify-only");
 
   const userPromptSubmitOutput = await runHook({
     hookEventName: "UserPromptSubmit",
@@ -521,13 +580,11 @@ try {
     prompt: "continue after notify-only from Mac"
   }, clientToken);
   assert(userPromptSubmitOutput === "{}", "UserPromptSubmit hook returns empty JSON");
-  const locallyContinuedEvent = await requestJson(`${baseUrl}/api/mobile/completions/${notifyOnlyEvent.id}`, {
-    headers: authHeaders(paired.sessionToken)
-  });
-  assert(locallyContinuedEvent.completion.status === "replied", "UserPromptSubmit marks notify-only completion replied");
-  assert(locallyContinuedEvent.completion.reply === "continue after notify-only from Mac", "UserPromptSubmit stores local prompt");
+  const locallyContinuedEvents = await listEvents(paired.sessionToken);
+  assert(!locallyContinuedEvents.some((event) => event.reply === "continue after notify-only from Mac"), "notify mode does not persist local prompt sync");
   await clearRelayHookMode();
 
+  await setRelayHookMode("approval");
   const stopHookWithAssistantMessage = runHook({
     hookEventName: "Stop",
     eventId: "hook-stop-assistant-message-smoke",
@@ -586,27 +643,26 @@ function authHeaders(token) {
 async function requestJson(url, options = {}) {
   const response = await request(url, options);
   const text = await response.text();
-  if (!response.ok) throw new Error(`${url} failed with ${response.status}: ${text}`);
+  if (!response.ok) throw new Error(`${url} failed with ${response.status}: ${text}\nRelay stderr:\n${serverStderr}`);
   return JSON.parse(text);
 }
 
 async function request(url, options = {}, expectOk = true) {
   const response = await fetch(url, options);
   if (expectOk && !response.ok) {
-    throw new Error(`${url} failed with ${response.status}: ${await response.text()}`);
+    throw new Error(`${url} failed with ${response.status}: ${await response.text()}\nRelay stderr:\n${serverStderr}`);
   }
   return response;
 }
 
 async function waitForServer(child, url) {
   const deadline = Date.now() + 10_000;
-  let stderr = "";
   child.stderr.on("data", (chunk) => {
-    stderr += chunk.toString();
+    serverStderr += chunk.toString();
   });
   while (Date.now() < deadline) {
     if (child.exitCode != null) {
-      throw new Error(`Relay exited early with code ${child.exitCode}: ${stderr}`);
+      throw new Error(`Relay exited early with code ${child.exitCode}: ${serverStderr}`);
     }
     try {
       const response = await fetch(`${url}/health`);
@@ -615,7 +671,7 @@ async function waitForServer(child, url) {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
   }
-  throw new Error(`Relay did not become healthy: ${stderr}`);
+  throw new Error(`Relay did not become healthy: ${serverStderr}`);
 }
 
 async function waitForEvent(sessionToken, kind, summary) {

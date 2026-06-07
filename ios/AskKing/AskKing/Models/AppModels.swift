@@ -72,13 +72,18 @@ struct EventItem: Identifiable, Codable, Hashable {
     let createdAt: String
     let expiresAt: String?
     let reply: String?
+    let notifyOnly: Bool?
+
+    var isNotifyOnly: Bool {
+        notifyOnly == true
+    }
 
     var isComputerHandoff: Bool {
         kind == "completion" && status == "replied" && reply == computerHandoffReply
     }
 
     var canHandoffToComputer: Bool {
-        kind == "completion" && status == "waiting"
+        kind == "completion" && status == "waiting" && !isNotifyOnly
     }
 
     var handoffActionTitle: String {
@@ -96,8 +101,13 @@ struct Approval: Identifiable, Codable {
     let reason: String
     let riskSummary: String
     let status: String
+    let notifyOnly: Bool?
     let createdAt: String
     let expiresAt: String
+
+    var isNotifyOnly: Bool {
+        notifyOnly == true
+    }
 
     var isHighRisk: Bool {
         riskSummary.localizedCaseInsensitiveContains("high risk")
@@ -119,9 +129,14 @@ struct Completion: Identifiable, Codable {
     let model: String
     let summary: String
     let status: String
+    let notifyOnly: Bool?
     let createdAt: String
     let expiresAt: String
     let reply: String?
+
+    var isNotifyOnly: Bool {
+        notifyOnly == true
+    }
 }
 
 struct PairResponse: Codable {

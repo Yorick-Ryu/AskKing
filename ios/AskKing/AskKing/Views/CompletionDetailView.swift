@@ -25,7 +25,9 @@ struct CompletionDetailView: View {
                     FieldRow("项目", completion.projectName)
                     FieldRow("目录", completion.cwd)
                     FieldRow("模型", completion.model)
-                    if completion.status == "waiting" {
+                    if completion.isNotifyOnly {
+                        FieldRow("状态", "仅通知")
+                    } else if completion.status == "waiting" {
                         CompletionStatusRow(status: completion.status, expiresAt: completion.expiresAt)
                     } else {
                         FieldRow("状态", completion.status)
@@ -68,7 +70,7 @@ struct CompletionDetailView: View {
                     reply: $reply,
                     placeholder: replyPlaceholder(for: completion),
                     isFocused: $isReplyFocused,
-                    isEnabled: completion.status == "waiting",
+                    isEnabled: completion.status == "waiting" && !completion.isNotifyOnly,
                     canSend: canSendReply(completion),
                     send: {
                         isReplyFocused = false
@@ -127,11 +129,11 @@ struct CompletionDetailView: View {
     }
 
     private func canSendReply(_ completion: Completion) -> Bool {
-        !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && completion.status == "waiting" && !isWorking
+        !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && completion.status == "waiting" && !completion.isNotifyOnly && !isWorking
     }
 
     private func canHandoff(_ completion: Completion) -> Bool {
-        completion.status == "waiting" && !isWorking
+        completion.status == "waiting" && !completion.isNotifyOnly && !isWorking
     }
 
     private func handoffButtonTitle(for completion: Completion) -> String {
@@ -142,6 +144,9 @@ struct CompletionDetailView: View {
     }
 
     private func replyPlaceholder(for completion: Completion) -> String {
+        if completion.isNotifyOnly {
+            return "仅通知"
+        }
         if completion.status == "replied" || !(completion.reply ?? "").isEmpty {
             return "已回复"
         }

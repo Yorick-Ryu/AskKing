@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { randomCode, randomToken, sha256 } from "./crypto.js";
 import type { ApprovalRequest, CompletionEvent, CodexClient, Device, HookMode } from "./types.js";
-import type { EventListItem, RelayStore } from "./store.types.js";
+import type { EventListItem, PairingCodeInput, RelayStore } from "./store.types.js";
 
 export class Store implements RelayStore {
   private db: Database.Database;
@@ -25,6 +25,7 @@ export class Store implements RelayStore {
       );
       create table if not exists devices (
         id text primary key,
+        client_id text not null default '',
         name text not null,
         apns_token text,
         session_token_hash text not null unique,
@@ -34,6 +35,7 @@ export class Store implements RelayStore {
       );
       create table if not exists pairing_codes (
         code text primary key,
+        client_id text not null default '',
         expires_at text not null,
         used_at text
       );
@@ -49,6 +51,7 @@ export class Store implements RelayStore {
         reason text not null,
         risk_summary text not null,
         status text not null,
+        notify_only integer not null default 0,
         decision_source text,
         created_at text not null,
         expires_at text not null,
@@ -64,6 +67,7 @@ export class Store implements RelayStore {
         session_key text not null default '',
         summary text not null,
         status text not null,
+        notify_only integer not null default 0,
         created_at text not null,
         expires_at text not null,
         reply text,
@@ -79,6 +83,26 @@ export class Store implements RelayStore {
     if (!completionColumns.some((column) => column.name === "session_key")) {
       this.db.prepare("alter table completions add column session_key text not null default ''").run();
     }
+    if (!completionColumns.some((column) => column.name === "notify_only")) {
+      this.db.prepare("alter table completions add column notify_only integer not null default 0").run();
+    }
+    const deviceColumns = this.db.prepare("pragma table_info(devices)").all() as { name: string }[];
+    if (!deviceColumns.some((column) => column.name === "client_id")) {
+      this.db.prepare("alter table devices add column client_id text not null default ''").run();
+    }
+    const pairingColumns = this.db.prepare("pragma table_info(pairing_codes)").all() as { name: string }[];
+    if (!pairingColumns.some((column) => column.name === "client_id")) {
+      this.db.prepare("alter table pairing_codes add column client_id text not null default ''").run();
+    }
+    const approvalColumns = this.db.prepare("pragma table_info(approvals)").all() as { name: string }[];
+    if (!approvalColumns.some((column) => column.name === "notify_only")) {
+      this.db.prepare("alter table approvals add column notify_only integer not null default 0").run();
+    }
+  }
+
+  private firstClientId() {
+    const row = this.db.prepare("select id from codex_clients where enabled = 1 order by created_at desc limit 1").get() as { id: string } | undefined;
+    return row?.id ?? "";
   }
 
   createClient(name: string, defaultProjectName: string) {
@@ -117,32 +141,35 @@ export class Store implements RelayStore {
     return result.changes > 0;
   }
 
-  createPairingCode(ttlSeconds = 600) {
+  createPairingCode(input: PairingCodeInput = {}, ttlSeconds = 600) {
     const code = randomCode();
+    const clientId = input.clientId || this.firstClientId();
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-    this.db.prepare("insert into pairing_codes (code, expires_at) values (?, ?)").run(code, expiresAt);
-    return { code, expiresAt };
+    this.db.prepare("insert into pairing_codes (code, client_id, expires_at) values (?, ?, ?)").run(code, clientId, expiresAt);
+    return { code, clientId, expiresAt };
   }
 
   pairDevice(code: string, name: string) {
     const now = new Date().toISOString();
-    const pairing = this.db.prepare("select code, expires_at as expiresAt, used_at as usedAt from pairing_codes where code = ?").get(code) as { code: string; expiresAt: string; usedAt: string | null } | undefined;
+    const pairing = this.db.prepare("select code, client_id as clientId, expires_at as expiresAt, used_at as usedAt from pairing_codes where code = ?").get(code) as { code: string; clientId: string; expiresAt: string; usedAt: string | null } | undefined;
     if (!pairing || pairing.usedAt || pairing.expiresAt < now) return null;
+    const clientId = pairing.clientId || this.firstClientId();
+    if (!clientId) return null;
     const id = randomToken("dev").slice(0, 22);
     const sessionToken = randomToken("ios");
     this.db.transaction(() => {
       this.db.prepare("update pairing_codes set used_at = ? where code = ?").run(now, code);
       this.db.prepare(`
-        insert into devices (id, name, session_token_hash, created_at, last_seen_at)
-        values (?, ?, ?, ?, ?)
-      `).run(id, name, sha256(sessionToken), now, now);
+        insert into devices (id, client_id, name, session_token_hash, created_at, last_seen_at)
+        values (?, ?, ?, ?, ?, ?)
+      `).run(id, clientId, name, sha256(sessionToken), now, now);
     })();
     return { id, sessionToken };
   }
 
   getDeviceByToken(token: string): Device | null {
     const row = this.db.prepare(`
-      select id, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, enabled, created_at as createdAt, last_seen_at as lastSeenAt
+      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash, enabled, created_at as createdAt, last_seen_at as lastSeenAt
       from devices where session_token_hash = ?
     `).get(sha256(token)) as Device | undefined;
     if (!row || !row.enabled) return null;
@@ -152,11 +179,16 @@ export class Store implements RelayStore {
 
   listDevices(): Device[] {
     return this.db.prepare(`
-      select id, name, apns_token as apnsToken, session_token_hash as sessionTokenHash,
+      select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash,
         enabled, created_at as createdAt, last_seen_at as lastSeenAt
       from devices
       order by created_at desc
     `).all() as Device[];
+  }
+
+  hasEnabledDevice(clientId: string): boolean {
+    const row = this.db.prepare("select 1 as found from devices where client_id = ? and enabled = 1 limit 1").get(clientId) as { found: number } | undefined;
+    return Boolean(row);
   }
 
   revokeDevice(deviceId: string) {
@@ -164,27 +196,27 @@ export class Store implements RelayStore {
     return result.changes > 0;
   }
 
-  setDeviceApnsToken(deviceId: string, token: string) {
+  setDeviceApnsToken(sessionTokenHash: string, token: string) {
     const now = new Date().toISOString();
     this.db.transaction(() => {
-      this.db.prepare("update devices set apns_token = null, last_seen_at = ? where apns_token = ? and id <> ?").run(now, token, deviceId);
-      this.db.prepare("update devices set apns_token = ?, last_seen_at = ? where id = ?").run(token, now, deviceId);
+      this.db.prepare("update devices set apns_token = null, last_seen_at = ? where apns_token = ? and session_token_hash <> ?").run(now, token, sessionTokenHash);
+      this.db.prepare("update devices set apns_token = ?, last_seen_at = ? where session_token_hash = ?").run(token, now, sessionTokenHash);
     })();
   }
 
-  listPushDevices(): Device[] {
+  listPushDevices(clientId?: string): Device[] {
     return this.db.prepare(`
-      select id, name, apnsToken, sessionTokenHash, enabled, createdAt, lastSeenAt
+      select id, clientId, name, apnsToken, sessionTokenHash, enabled, createdAt, lastSeenAt
       from (
-        select id, name, apns_token as apnsToken, session_token_hash as sessionTokenHash,
+        select id, client_id as clientId, name, apns_token as apnsToken, session_token_hash as sessionTokenHash,
           enabled, created_at as createdAt, last_seen_at as lastSeenAt,
           row_number() over (partition by apns_token order by last_seen_at desc, created_at desc) as tokenRank
         from devices
-        where enabled = 1 and apns_token is not null
+        where enabled = 1 and apns_token is not null and (? = '' or client_id = ?)
       )
       where tokenRank = 1
       order by lastSeenAt desc
-    `).all() as Device[];
+    `).all(clientId ?? "", clientId ?? "") as Device[];
   }
 
   createApproval(input: Omit<ApprovalRequest, "id" | "status" | "decisionSource" | "createdAt" | "decidedAt">) {
@@ -192,32 +224,50 @@ export class Store implements RelayStore {
     const createdAt = new Date().toISOString();
     const row: ApprovalRequest = { ...input, id, status: "pending", decisionSource: null, createdAt, decidedAt: null };
     this.db.prepare(`
-      insert into approvals (id, client_id, event_id, project_name, cwd, model, command_summary, command_full, reason, risk_summary, status, created_at, expires_at)
-      values (@id, @clientId, @eventId, @projectName, @cwd, @model, @commandSummary, @commandFull, @reason, @riskSummary, @status, @createdAt, @expiresAt)
-    `).run(row);
+      insert into approvals (id, client_id, event_id, project_name, cwd, model, command_summary, command_full, reason, risk_summary, status, notify_only, created_at, expires_at)
+      values (@id, @clientId, @eventId, @projectName, @cwd, @model, @commandSummary, @commandFull, @reason, @riskSummary, @status, @notifyOnly, @createdAt, @expiresAt)
+    `).run({ ...row, notifyOnly: row.notifyOnly ? 1 : 0 });
     return row;
   }
 
-  getApproval(id: string): ApprovalRequest | null {
-    return this.db.prepare(`
+  getApproval(id: string, clientId?: string): ApprovalRequest | null {
+    const row = this.db.prepare(`
       select id, client_id as clientId, event_id as eventId, project_name as projectName, cwd, model, command_summary as commandSummary,
-        command_full as commandFull, reason, risk_summary as riskSummary, status, decision_source as decisionSource,
+        command_full as commandFull, reason, risk_summary as riskSummary, status, notify_only as notifyOnly, decision_source as decisionSource,
         created_at as createdAt, expires_at as expiresAt, decided_at as decidedAt
-      from approvals where id = ?
-    `).get(id) as ApprovalRequest | null;
+      from approvals where id = ? and (? = '' or client_id = ?)
+    `).get(id, clientId ?? "", clientId ?? "") as ApprovalRequest | null;
+    return row ? { ...row, notifyOnly: Boolean(row.notifyOnly) } : null;
   }
 
-  decideApproval(id: string, status: "allowed" | "denied", source: string) {
+  expireApproval(id: string, clientId: string): ApprovalRequest | null {
+    const current = this.getApproval(id, clientId);
     const now = new Date().toISOString();
-    const current = this.getApproval(id);
+    if (!current || current.status !== "pending" || current.expiresAt >= now) return current;
+    this.db.prepare("update approvals set status = 'expired' where id = ? and client_id = ? and status = 'pending' and expires_at < ?").run(id, clientId, now);
+    return this.getApproval(id, clientId);
+  }
+
+  decideApproval(id: string, clientId: string, status: "allowed" | "denied", source: string) {
+    const now = new Date().toISOString();
+    const current = this.getApproval(id, clientId);
     if (!current) return null;
+    if (current.notifyOnly) return current;
     if (current.status !== "pending") return current;
     if (current.expiresAt < now) {
-      this.db.prepare("update approvals set status = 'expired' where id = ? and status = 'pending'").run(id);
-      return this.getApproval(id);
+      return this.expireApproval(id, clientId);
     }
-    this.db.prepare("update approvals set status = ?, decision_source = ?, decided_at = ? where id = ? and status = 'pending'").run(status, source, now, id);
-    return this.getApproval(id);
+    this.db.prepare("update approvals set status = ?, decision_source = ?, decided_at = ? where id = ? and client_id = ? and status = 'pending'").run(status, source, now, id, clientId);
+    return this.getApproval(id, clientId);
+  }
+
+  consumeTerminalApproval(id: string, clientId: string): ApprovalRequest | null {
+    return this.db.transaction(() => {
+      const approval = this.getApproval(id, clientId);
+      if (!approval || (approval.status !== "allowed" && approval.status !== "denied" && approval.status !== "expired")) return null;
+      this.db.prepare("delete from approvals where id = ? and client_id = ?").run(id, clientId);
+      return approval;
+    })();
   }
 
   createCompletion(input: Omit<CompletionEvent, "id" | "createdAt" | "reply" | "repliedAt">) {
@@ -225,51 +275,70 @@ export class Store implements RelayStore {
     const createdAt = new Date().toISOString();
     const row: CompletionEvent = { ...input, id, createdAt, reply: null, repliedAt: null };
     this.db.prepare(`
-      insert into completions (id, client_id, event_id, project_name, cwd, model, session_key, summary, status, created_at, expires_at)
-      values (@id, @clientId, @eventId, @projectName, @cwd, @model, @sessionKey, @summary, @status, @createdAt, @expiresAt)
-    `).run(row);
+      insert into completions (id, client_id, event_id, project_name, cwd, model, session_key, summary, status, notify_only, created_at, expires_at)
+      values (@id, @clientId, @eventId, @projectName, @cwd, @model, @sessionKey, @summary, @status, @notifyOnly, @createdAt, @expiresAt)
+    `).run({ ...row, notifyOnly: row.notifyOnly ? 1 : 0 });
     return row;
   }
 
-  getCompletion(id: string): CompletionEvent | null {
-    return this.db.prepare(`
+  getCompletion(id: string, clientId?: string): CompletionEvent | null {
+    const row = this.db.prepare(`
       select id, client_id as clientId, event_id as eventId, project_name as projectName, cwd, model, session_key as sessionKey, summary, status,
-        created_at as createdAt, expires_at as expiresAt, reply, replied_at as repliedAt
-      from completions where id = ?
-    `).get(id) as CompletionEvent | null;
+        notify_only as notifyOnly, created_at as createdAt, expires_at as expiresAt, reply, replied_at as repliedAt
+      from completions where id = ? and (? = '' or client_id = ?)
+    `).get(id, clientId ?? "", clientId ?? "") as CompletionEvent | null;
+    return row ? { ...row, notifyOnly: Boolean(row.notifyOnly) } : null;
   }
 
-  replyCompletion(id: string, reply: string) {
-    const current = this.getCompletion(id);
+  expireCompletion(id: string, clientId: string): CompletionEvent | null {
+    const current = this.getCompletion(id, clientId);
+    const now = new Date().toISOString();
+    if (!current || current.status !== "waiting" || current.expiresAt >= now) return current;
+    this.db.prepare("update completions set status = 'expired' where id = ? and client_id = ? and status = 'waiting' and expires_at < ?").run(id, clientId, now);
+    return this.getCompletion(id, clientId);
+  }
+
+  replyCompletion(id: string, clientId: string, reply: string) {
+    const current = this.getCompletion(id, clientId);
     const now = new Date().toISOString();
     if (!current) return null;
+    if (current.notifyOnly) return current;
     if (current.status !== "waiting" && current.status !== "notified") return current;
     if (current.status === "waiting" && current.expiresAt < now) {
-      this.db.prepare("update completions set status = 'expired' where id = ? and status = 'waiting'").run(id);
-      return this.getCompletion(id);
+      return this.expireCompletion(id, clientId);
     }
-    this.db.prepare("update completions set status = 'replied', reply = ?, replied_at = ? where id = ? and status in ('waiting', 'notified')").run(reply, now, id);
-    return this.getCompletion(id);
+    this.db.prepare("update completions set status = 'replied', reply = ?, replied_at = ? where id = ? and client_id = ? and status in ('waiting', 'notified')").run(reply, now, id, clientId);
+    return this.getCompletion(id, clientId);
   }
 
-  interruptCompletion(id: string) {
-    const current = this.getCompletion(id);
+  interruptCompletion(id: string, clientId: string) {
+    const current = this.getCompletion(id, clientId);
     if (!current) return null;
     if (current.status !== "waiting" && current.status !== "notified") return current;
-    this.db.prepare("update completions set status = 'interrupted' where id = ? and status in ('waiting', 'notified')").run(id);
-    return this.getCompletion(id);
+    this.db.prepare("update completions set status = 'interrupted' where id = ? and client_id = ? and status in ('waiting', 'notified')").run(id, clientId);
+    return this.getCompletion(id, clientId);
+  }
+
+  consumeTerminalCompletion(id: string, clientId: string): CompletionEvent | null {
+    return this.db.transaction(() => {
+      const completion = this.getCompletion(id, clientId);
+      if (!completion || (completion.status !== "replied" && completion.status !== "interrupted" && completion.status !== "expired")) return null;
+      this.db.prepare("delete from completions where id = ? and client_id = ?").run(id, clientId);
+      return completion;
+    })();
   }
 
   continueLatestCompletionLocally(input: { clientId: string; cwd: string; projectName: string; sessionKey: string; prompt: string }) {
     if (!input.sessionKey) return null;
     const current = this.db.prepare(`
       select id, client_id as clientId, event_id as eventId, project_name as projectName, cwd, model, session_key as sessionKey, summary, status,
-        created_at as createdAt, expires_at as expiresAt, reply, replied_at as repliedAt
+        notify_only as notifyOnly, created_at as createdAt, expires_at as expiresAt, reply, replied_at as repliedAt
       from completions
       where client_id = ?
         and cwd = ?
         and project_name = ?
         and session_key = ?
+        and notify_only = 0
         and status in ('waiting', 'notified', 'interrupted')
       order by created_at desc
       limit 1
@@ -279,47 +348,45 @@ export class Store implements RelayStore {
     this.db.prepare(`
       update completions
       set status = 'replied', reply = ?, replied_at = ?
-      where id = ? and status in ('waiting', 'notified', 'interrupted')
-    `).run(input.prompt, new Date().toISOString(), current.id);
-    return this.getCompletion(current.id);
+      where id = ? and client_id = ? and notify_only = 0 and status in ('waiting', 'notified', 'interrupted')
+    `).run(input.prompt, new Date().toISOString(), current.id, input.clientId);
+    return this.getCompletion(current.id, input.clientId);
   }
 
-  getHookMode(): HookMode | null {
-    const row = this.db.prepare("select value from settings where key = 'hook_mode'").get() as { value: string } | undefined;
+  getHookMode(clientId: string): HookMode | null {
+    const row = this.db.prepare("select value from settings where key = ?").get(`hook_mode:${clientId}`) as { value: string } | undefined;
     if (row?.value === "off" || row?.value === "notify" || row?.value === "approval" || row?.value === "full") {
       return row.value;
     }
     return null;
   }
 
-  setHookMode(mode: HookMode): HookMode {
+  setHookMode(clientId: string, mode: HookMode): HookMode {
     this.db.prepare(`
       insert into settings (key, value, updated_at)
-      values ('hook_mode', ?, ?)
+      values (?, ?, ?)
       on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at
-    `).run(mode, new Date().toISOString());
+    `).run(`hook_mode:${clientId}`, mode, new Date().toISOString());
     return mode;
   }
 
-  clearHookMode() {
-    this.db.prepare("delete from settings where key = 'hook_mode'").run();
+  clearHookMode(clientId: string) {
+    this.db.prepare("delete from settings where key = ?").run(`hook_mode:${clientId}`);
   }
 
-  listEvents(limit = 50): EventListItem[] {
-    return this.db.prepare(`
-      select 'approval' as kind, id, project_name as projectName, model, status, command_summary as summary, created_at as createdAt, expires_at as expiresAt, null as reply
+  listEvents(clientId: string, limit = 50): EventListItem[] {
+    const rows = this.db.prepare(`
+      select 'approval' as kind, id, project_name as projectName, model, status, command_summary as summary, created_at as createdAt, expires_at as expiresAt, null as reply, notify_only as notifyOnly
       from approvals
+      where client_id = ?
       union all
-      select 'completion' as kind, id, project_name as projectName, model, status, summary, created_at as createdAt, expires_at as expiresAt, reply
+      select 'completion' as kind, id, project_name as projectName, model, status, summary, created_at as createdAt, expires_at as expiresAt, reply, notify_only as notifyOnly
       from completions
+      where client_id = ?
       order by createdAt desc
       limit ?
-    `).all(limit) as EventListItem[];
+    `).all(clientId, clientId, limit) as EventListItem[];
+    return rows.map((row) => ({ ...row, notifyOnly: Boolean(row.notifyOnly) }));
   }
 
-  expireOld() {
-    const now = new Date().toISOString();
-    this.db.prepare("update approvals set status = 'expired' where status = 'pending' and expires_at < ?").run(now);
-    this.db.prepare("update completions set status = 'expired' where status = 'waiting' and expires_at < ?").run(now);
-  }
 }
